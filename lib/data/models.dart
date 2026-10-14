@@ -166,6 +166,23 @@ class Expense {
   );
 }
 
+/// Artikal koji tek treba upisati, npr. iz uvezene tabele.
+class NewItem {
+  const NewItem({
+    required this.name,
+    required this.kind,
+    required this.price,
+    this.initialQty = 0,
+    this.imageId,
+  });
+
+  final String name;
+  final ItemKind kind;
+  final int price;
+  final int initialQty;
+  final String? imageId;
+}
+
 /// Slika iz zajedničkog kataloga.
 class CatalogImage {
   const CatalogImage({

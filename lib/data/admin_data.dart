@@ -21,6 +21,8 @@ abstract interface class AdminData implements Listenable {
     int initialQty,
     String? imageId,
   });
+  /// Upisuje više artikala odjednom, redom iza postojećih; npr. uvoz iz Excela.
+  Future<void> addItems(List<NewItem> items);
   Future<void> updateItem(Item item);
   Future<void> removeItem(String id);
   Future<void> seedDemoItems();

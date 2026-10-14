@@ -29,6 +29,8 @@ kafića; pretplate vodi superadmin.
    `supabase/postavi_superadmina.sql` sa njegovim e-mailom.
 3. Postaviti serversku funkciju `create-owner` (Edge Functions → Deploy a new function).
 4. Po želji ubaciti katalog slika: `python tool/slike_u_sql.py`, pa pokrenuti `supabase/slike.sql`.
+   Slike za artikle iz Excel tabele kafića skida `python tool/skini_slike.py "tabela.xlsx"`
+   (treba `pip install openpyxl Pillow requests`); ona na kraju sama napravi `supabase/slike.sql`.
 5. Upisati adresu projekta i objavljeni ključ u `lib/config.dart`.
 
 `supabase/obrisi_sve_podatke.sql` briše sve kafiće i naloge osim superadmina; koristi se samo za
@@ -38,3 +40,5 @@ ponovno testiranje od nule.
 
 Font Manrope: SIL Open Font License 1.1 (`assets/fonts/OFL.txt`).
 Ikone na probnim slikama artikala: Material Icons, Apache License 2.0.
+Fotografije artikala: Creative Commons i javno dobro, preko Openverse; autor i licenca svake
+slike su u `supabase/slike/IZVORI.md`.

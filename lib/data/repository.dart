@@ -721,6 +721,19 @@ class Repository extends ChangeNotifier implements AdminData {
 
   /// Artikli i stanja iz primjera knjige šanka, za isprobavanje.
   @override
+  Future<void> addItems(List<NewItem> items) async {
+    for (final i in items) {
+      await addItem(
+        name: i.name,
+        kind: i.kind,
+        price: i.price,
+        initialQty: i.initialQty,
+        imageId: i.imageId,
+      );
+    }
+  }
+
+  @override
   Future<void> seedDemoItems() async {
     for (final (name, kind, price, qty) in demoItems) {
       await addItem(name: name, kind: kind, price: price, initialQty: qty);

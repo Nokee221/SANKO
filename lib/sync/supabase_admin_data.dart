@@ -164,6 +164,27 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
     );
   }
 
+  // Redoslijed dodjeljuje okidač u bazi, red po red iza postojećih artikala.
+  @override
+  Future<void> addItems(List<NewItem> items) {
+    if (items.any((i) => i.name.trim().isEmpty)) {
+      throw SankoException('Unesite naziv artikla.');
+    }
+    return _write(
+      () => _client.from('items').insert([
+        for (final i in items)
+          {
+            'venue_id': venueId,
+            'name': i.name.trim(),
+            'kind': i.kind.name,
+            'price': i.price,
+            'initial_qty': i.initialQty,
+            'image_id': i.imageId,
+          },
+      ]),
+    );
+  }
+
   /// Nova cijena i naziv važe od sljedeće smjene.
   @override
   Future<void> updateItem(Item item) {

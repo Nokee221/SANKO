@@ -5,6 +5,7 @@ import '../../data/models.dart';
 import '../common.dart';
 import '../format.dart';
 import '../theme.dart';
+import 'item_import_dialog.dart';
 import 'scope.dart';
 import 'widgets.dart';
 
@@ -138,6 +139,19 @@ class ItemsPage extends StatelessWidget {
             const Spacer(),
             SizedBox(
               height: 46,
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.upload_file_outlined),
+                label: const Text('Uvezi iz Excela'),
+                onPressed: () => importItemsFromExcel(
+                  context,
+                  existing: items,
+                  catalog: catalog,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            SizedBox(
+              height: 46,
               child: FilledButton.icon(
                 icon: const Icon(Icons.add),
                 label: const Text('Novi artikal'),
@@ -153,9 +167,24 @@ class ItemsPage extends StatelessWidget {
           child: items.isEmpty
               ? EmptyState(
                   text: 'Još nema artikala',
-                  action: OutlinedButton(
-                    onPressed: () => AdminScope.of(context).seedDemoItems(),
-                    child: const Text('Učitaj primjer artikala'),
+                  action: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      FilledButton.icon(
+                        icon: const Icon(Icons.upload_file_outlined),
+                        label: const Text('Uvezi iz Excela'),
+                        onPressed: () => importItemsFromExcel(
+                          context,
+                          existing: items,
+                          catalog: catalog,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      OutlinedButton(
+                        onPressed: () => AdminScope.of(context).seedDemoItems(),
+                        child: const Text('Učitaj primjer artikala'),
+                      ),
+                    ],
                   ),
                 )
               : ListView(
