@@ -1,28 +1,13 @@
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'app.dart';
-import 'config.dart';
-import 'data/db.dart';
 import 'data/repository.dart';
-import 'sync/supabase_waiter_backend.dart';
 import 'sync/waiter_sync.dart';
 import 'ui/waiter/pin_screen.dart';
 import 'ui/waiter/scope.dart';
 import 'ui/waiter/venue_code_screen.dart';
 
 /// Aplikacija za telefon konobara: unos ide u lokalnu bazu i šalje se na server kad ima mreže.
-Future<void> runWaiterApp() async {
-  await Supabase.initialize(url: supabaseUrl, publishableKey: supabaseKey);
-  final repo = Repository(await openAppDatabase());
-  final sync = WaiterSync(
-    repo,
-    SupabaseWaiterBackend(Supabase.instance.client, repo),
-  );
-  await sync.init();
-  runApp(WaiterApp(repo: repo, sync: sync));
-}
-
 class WaiterApp extends StatelessWidget {
   const WaiterApp({super.key, required this.repo, required this.sync});
 

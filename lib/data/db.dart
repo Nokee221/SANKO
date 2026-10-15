@@ -11,7 +11,7 @@ const _corrections = '''
     shift_id TEXT NOT NULL REFERENCES shifts (id),
     item_name TEXT NOT NULL,
     field TEXT NOT NULL,
-    old_value INTEGER NOT NULL,
+    old_value INTEGER,
     new_value INTEGER NOT NULL,
     note TEXT,
     corrected_at INTEGER NOT NULL
@@ -36,7 +36,9 @@ const _schema = [
     sort_order INTEGER NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1,
     created_at INTEGER NOT NULL,
-    image_id TEXT
+    image_id TEXT,
+    min_qty INTEGER,
+    par_qty INTEGER
   )''',
   '''
   CREATE TABLE shifts (
@@ -46,7 +48,10 @@ const _schema = [
     seq INTEGER NOT NULL,
     opened_at INTEGER NOT NULL,
     closed_at INTEGER,
-    dirty INTEGER NOT NULL DEFAULT 0
+    dirty INTEGER NOT NULL DEFAULT 0,
+    kitchen INTEGER,
+    cash INTEGER,
+    card INTEGER
   )''',
   'CREATE INDEX shifts_business_date_idx ON shifts (business_date)',
   // Naziv, vrsta i cijena se kopiraju pri otvaranju smjene,
@@ -101,7 +106,7 @@ Future<void> createSchema(Database db) async {
 
 Future<Database> openAppDatabase() async {
   final options = OpenDatabaseOptions(
-    version: 4,
+    version: 5,
     onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
     onCreate: (db, _) => createSchema(db),
     onUpgrade: (db, from, _) async {
@@ -120,6 +125,24 @@ Future<Database> openAppDatabase() async {
         );
       }
       if (from < 4) await db.execute(_corrections);
+      if (from < 5) {
+        // Kuhinja i predaja novca uz smjenu, minimum i narudžba uz artikal.
+        for (final column in ['kitchen', 'cash', 'card']) {
+          await db.execute('ALTER TABLE shifts ADD COLUMN $column INTEGER');
+        }
+        for (final column in ['min_qty', 'par_qty']) {
+          await db.execute('ALTER TABLE items ADD COLUMN $column INTEGER');
+        }
+        // Ispravka predaje stare smjene nema staru vrijednost.
+        if (from >= 4) {
+          await db.execute('ALTER TABLE corrections RENAME TO corrections_old');
+          await db.execute(_corrections);
+          await db.execute(
+            'INSERT INTO corrections SELECT * FROM corrections_old',
+          );
+          await db.execute('DROP TABLE corrections_old');
+        }
+      }
     },
   );
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {

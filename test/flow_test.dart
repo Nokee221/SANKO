@@ -69,11 +69,13 @@ void main() {
         for (final f in Directory(
           'supabase/slike',
         ).listSync().whereType<File>())
-          CatalogImage(
-            id: 'slika-${path.basenameWithoutExtension(f.path)}',
-            name: path.basenameWithoutExtension(f.path),
-            bytes: await f.readAsBytes(),
-          ),
+          // U folderu su i izvori slika (IZVORI.md, izvori.json).
+          if (const ['.png', '.jpg'].contains(path.extension(f.path)))
+            CatalogImage(
+              id: 'slika-${path.basenameWithoutExtension(f.path)}',
+              name: path.basenameWithoutExtension(f.path),
+              bytes: await f.readAsBytes(),
+            ),
       ];
       await server.saveImages(images);
       for (final item in await server.items()) {
@@ -229,14 +231,33 @@ void main() {
       }
     });
     await tester.pumpAndSettle();
-    await tapText('Zaključi smjenu');
-    await tapText('Zaključi smjenu');
+    await tapText('Dalje: predaja');
 
     // 404 kafe, 30 kapučina, 7 čajeva, 13 kola, 9 đusa.
     const sank = 404 * 250 + 30 * 350 + 7 * 300 + 13 * 350 + 9 * 350;
+    // Kuhinja 20 KM, rashod 5,50 KM; konobar predaje 10 KM manje.
+    const total = sank + 2000 - 550;
+    expect(find.text('PREDAJA'), findsOneWidget);
+    expect(find.text('Unesite gotovinu'), findsOneWidget);
+    await tester.enterText(find.widgetWithText(TextField, 'Kuhinja'), '20');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Gotovina'),
+      fmtMoney(total - 5000 - 1000).replaceAll('.', ''),
+    );
+    await tester.enterText(find.widgetWithText(TextField, 'Kartice'), '50');
+    await tester.pumpAndSettle();
+    expect(find.text(fmtKm(total)), findsOneWidget);
+    expect(find.text('Manjak'), findsOneWidget);
+    expect(find.text(fmtKm(1000)), findsOneWidget);
+    await _shot('08_predaja');
+    await tapText('Zaključi smjenu');
+    expect(find.textContaining('Manjak 10,00 KM vidi i gazda'), findsOneWidget);
+    await tapText('Zaključi smjenu');
+
     expect(find.text('Smjena zaključena'), findsOneWidget);
     expect(find.text(fmtKm(sank)), findsOneWidget);
-    expect(find.text(fmtKm(sank - 550)), findsOneWidget);
+    expect(find.text(fmtKm(total)), findsOneWidget);
+    expect(find.text('Manjak'), findsOneWidget);
 
     // Bez mreže smjena čeka na telefonu; server je još vidi kao otvorenu.
     await tester.runAsync(sync.pushNow);
@@ -312,12 +333,69 @@ void main() {
     await tester.tap(find.textContaining('Smjena 1, Amra'));
     await tester.pumpAndSettle();
     expect(find.text(fmtMoney(sank)), findsOneWidget);
-    expect(find.text(fmtMoney(sank - 550)), findsOneWidget);
+    expect(find.text(fmtMoney(total)), findsOneWidget);
+    expect(find.text('Manjak 10,00 KM'), findsOneWidget);
     expect(find.text('Konzum, mlijeko'), findsOneWidget);
     await _shot('11_admin_smjena');
     await tapText('Ispravi smjenu');
     await _shot('11c_admin_ispravka');
     await tapText('Odustani');
+
+    // Mjesečni izvještaj vidi Amrin manjak.
+    await tapText('Izvještaj');
+    expect(find.text('Po konobaru'), findsOneWidget);
+    expect(find.text('Manjak u predaji'), findsOneWidget);
+    expect(find.text('Amra'), findsOneWidget);
+    expect(find.text('Bakir'), findsOneWidget);
+    await _shot('14_admin_izvjestaj');
+
+    // Konobar je donio ostatak novca; gazda ispravlja predaju.
+    await tapText('Obračun');
+    await tester.tap(find.textContaining('Smjena 1, Amra'));
+    await tester.pumpAndSettle();
+    await tapText('Kuhinja i predaja');
+    await tester.enterText(
+      find.widgetWithText(TextField, 'Gotovina'),
+      fmtMoney(total - 5000).replaceAll('.', ''),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('tačno.'), findsOneWidget);
+    await tapText('Sačuvaj');
+    expect(find.text('Tačno predano'), findsOneWidget);
+    expect(find.textContaining('gotovina'), findsWidgets);
+
+    await tapText('Narudžba');
+    expect(find.textContaining('Nijedan artikal nema minimum'), findsOneWidget);
+    // Gazda postavi minimum za kolu i đus; oba su sada ispod njega.
+    await tester.runAsync(() async {
+      for (final i in await server.items()) {
+        final (min, par) = switch (i.name) {
+          'KOLA' => (100, 144),
+          'ĐUS' => (48, null),
+          _ => (null, null),
+        };
+        if (min == null) continue;
+        await server.updateItem(
+          Item(
+            id: i.id,
+            name: i.name,
+            kind: i.kind,
+            price: i.price,
+            initialQty: i.initialQty,
+            imageId: i.imageId,
+            minQty: min,
+            parQty: par,
+          ),
+        );
+      }
+    });
+    await tester.pumpAndSettle();
+    expect(find.text('Pošalji na Viber'), findsOneWidget);
+    expect(find.text('KOLA'), findsOneWidget);
+    expect(find.text('ĐUS'), findsOneWidget);
+    await _shot('15_admin_narudzba');
+    await tapText('Obavještenja');
+    expect(find.textContaining('još nisu podešena'), findsOneWidget);
 
     await tapText('Prosjek');
     expect(find.textContaining('Zadnjih 30 dana:'), findsOneWidget);

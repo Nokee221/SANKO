@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../data/errors.dart';
@@ -93,6 +94,26 @@ class AdminSession extends ChangeNotifier {
     venue = selected;
     data = SupabaseAdminData(_client, selected.id);
     notifyListeners();
+    unawaited(_rememberVenue(selected.id));
+  }
+
+  static const _venueKey = 'admin_venue_id';
+
+  /// Lokal koji je gazda zadnji gledao, da se sljedeći put otvori on.
+  Future<void> _rememberVenue(String id) async {
+    try {
+      await (await SharedPreferences.getInstance()).setString(_venueKey, id);
+    } catch (_) {
+      // Bez pamćenja aplikacija otvara prvi lokal; to nije greška za gazdu.
+    }
+  }
+
+  Future<String?> _rememberedVenue() async {
+    try {
+      return (await SharedPreferences.getInstance()).getString(_venueKey);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> reload() => _load();
@@ -121,7 +142,7 @@ class AdminSession extends ChangeNotifier {
         () => _client
             .from('venues')
             .select('id, name, code, paid_until')
-            .order('name'),
+            .order('name', ascending: true),
       );
       venues = [
         for (final r in rows)
@@ -137,8 +158,10 @@ class AdminSession extends ChangeNotifier {
       if (current != null) {
         venue = current;
       } else if (venues.isNotEmpty) {
+        final remembered = await _rememberedVenue();
         data?.dispose();
-        venue = venues.first;
+        venue =
+            venues.where((v) => v.id == remembered).firstOrNull ?? venues.first;
         data = SupabaseAdminData(_client, venue!.id);
       }
     } on OfflineException {

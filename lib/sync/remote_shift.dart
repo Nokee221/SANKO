@@ -11,6 +11,9 @@ class RemoteShift {
     required this.lines,
     required this.receipts,
     required this.expenses,
+    this.kitchen,
+    this.cash,
+    this.card,
   });
 
   final String id;
@@ -25,6 +28,11 @@ class RemoteShift {
   final List<RemoteLine> lines;
   final List<RemoteReceipt> receipts;
   final List<RemoteExpense> expenses;
+
+  /// Kuhinja i predaja novca, unesene pri zaključenju; null prije toga.
+  final int? kitchen;
+  final int? cash;
+  final int? card;
 
   /// Red iz Supabasea sa ugniježđenim shift_lines, receipts(receipt_lines) i expenses.
   factory RemoteShift.fromJson(Map<String, dynamic> j) => RemoteShift(
@@ -73,12 +81,18 @@ class RemoteShift {
           createdAt: DateTime.parse(e['created_at'] as String),
         ),
     ],
+    kitchen: j['kitchen'] as int?,
+    cash: j['cash'] as int?,
+    card: j['card'] as int?,
   );
 
   /// Tijelo poziva sync_shift.
   Map<String, Object?> toPayload() => {
     'id': id,
     'closed_at': closedAt?.toUtc().toIso8601String(),
+    'kitchen': kitchen,
+    'cash': cash,
+    'card': card,
     'counts': [
       for (final l in lines)
         if (l.closingQty != null)

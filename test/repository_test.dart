@@ -243,4 +243,86 @@ void main() {
       ]);
     },
   );
+
+  test(
+    'predaja: manjak se računa, gazda ga ispravlja i ispravka se zapisuje',
+    () async {
+      final ids = await itemIds();
+      final amra = (await repo.workerByPin('1111'))!;
+      final shift = await repo.startShift(amra.id);
+      await repo.addExpense(shift.id, description: 'Mlijeko', amount: 300);
+      await repo.setClosingQty(shift.id, ids['KAFA']!, 148787);
+      await repo.setClosingQty(shift.id, ids['KOLA']!, 67);
+      await repo.setClosingQty(shift.id, ids['ĐUS']!, 56);
+      await expectLater(
+        repo.closeShift(
+          shift.id,
+          handover: const Handover(kitchen: -1, cash: 0, card: 0),
+        ),
+        throwsA(isA<SankoException>()),
+      );
+      // 100 kafa i 10 kola = 285,00; kuhinja 40,00; rashod 3,00.
+      await repo.closeShift(
+        shift.id,
+        handover: const Handover(kitchen: 4000, cash: 25000, card: 6200),
+      );
+
+      var o = await repo.obracunForShift(shift.id);
+      expect(o.sank, 28500);
+      expect(o.total, 28500 + 4000 - 300);
+      expect(o.handedOver, 31200);
+      expect(o.difference, -1000);
+
+      await repo.setHandover(
+        shift.id,
+        const Handover(kitchen: 4000, cash: 26000, card: 6200),
+        note: 'Donio ostatak',
+      );
+      o = await repo.obracunForShift(shift.id);
+      expect(o.difference, 0);
+      final corrections = await repo.corrections([shift.id]);
+      expect(corrections.single.field, CorrectionField.cash);
+      expect(corrections.single.oldValue, 25000);
+      expect(corrections.single.newValue, 26000);
+
+      final summary = (await repo.shiftSummaries(
+        DateTime(2025, 7, 1),
+        DateTime(2025, 7, 31),
+      )).single;
+      expect(summary.revenue, 28500 + 4000);
+      expect(summary.difference, 0);
+      expect(summary.workerName, 'Amra');
+    },
+  );
+
+  test(
+    'smjena bez predaje nema razliku, a dan sabira samo smjene s predajom',
+    () async {
+      final ids = await itemIds();
+      final amra = (await repo.workerByPin('1111'))!;
+      final bakir = (await repo.workerByPin('2222'))!;
+      final first = await repo.startShift(amra.id);
+      await repo.setClosingQty(first.id, ids['KAFA']!, 148787);
+      await repo.setClosingQty(first.id, ids['KOLA']!, 77);
+      await repo.setClosingQty(first.id, ids['ĐUS']!, 56);
+      await repo.closeShift(first.id);
+      expect((await repo.obracunForShift(first.id)).difference, isNull);
+
+      now = DateTime(2025, 7, 30, 15);
+      final second = await repo.startShift(bakir.id);
+      await repo.setClosingQty(second.id, ids['KAFA']!, 148887);
+      await repo.setClosingQty(second.id, ids['KOLA']!, 77);
+      await repo.setClosingQty(second.id, ids['ĐUS']!, 56);
+      await repo.closeShift(
+        second.id,
+        handover: const Handover(kitchen: 0, cash: 24000, card: 0),
+      );
+
+      final day = await repo.obracunForDay(DateTime(2025, 7, 30));
+      expect(day.sank, 50000);
+      expect(day.handedOver, 24000);
+      // Bakir je predao 10 KM manje od svojih 250 KM; Amrina smjena nema predaju.
+      expect(day.difference, -1000);
+    },
+  );
 }

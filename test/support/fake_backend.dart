@@ -142,14 +142,18 @@ class FakeBackend implements WaiterBackend {
           whereArgs: [id, c['item_id']],
         );
       }
-      if (payload['closed_at'] != null) {
-        await txn.update(
-          'shifts',
-          {'closed_at': ms(payload['closed_at'])},
-          where: 'id = ?',
-          whereArgs: [id],
-        );
-      }
+      await txn.update(
+        'shifts',
+        {
+          'kitchen': payload['kitchen'],
+          'cash': payload['cash'],
+          'card': payload['card'],
+          if (payload['closed_at'] != null)
+            'closed_at': ms(payload['closed_at']),
+        },
+        where: 'id = ?',
+        whereArgs: [id],
+      );
     });
     server.refresh();
   }

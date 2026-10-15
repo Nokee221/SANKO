@@ -51,7 +51,7 @@ void main() {
           ShiftCorrection(
             shiftId: 's1',
             itemName: 'ĐUS',
-            isClosing: true,
+            field: CorrectionField.closing,
             oldValue: 35,
             newValue: 30,
             note: 'Ponovo prebrojano',

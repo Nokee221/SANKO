@@ -8,10 +8,11 @@ import '../common.dart';
 import '../theme.dart';
 import 'item_tile.dart';
 import 'number_pad.dart';
+import 'predaja_screen.dart';
 import 'scope.dart';
 import 'ulaz_screen.dart';
 
-/// Brojanje na kraju smjene. Kad je uneseno sve, smjena se zaključuje.
+/// Brojanje na kraju smjene. Kad je uneseno sve, slijedi predaja i zaključenje.
 /// Zatvara se sa `true` ako je smjena zaključena.
 class StanjeScreen extends StatefulWidget {
   const StanjeScreen({super.key, required this.shiftId});
@@ -44,39 +45,13 @@ class _StanjeScreenState extends State<StanjeScreen> {
     );
   }
 
-  Future<void> _close(Obracun obracun) async {
-    final anomalies = obracun.lines.where((l) => l.hasAnomaly).toList();
-    final ok = await confirm(
+  /// Kad je sve prebrojano, ide se na predaju; tamo se smjena zaključuje.
+  Future<void> _toHandover() async {
+    final closed = await Navigator.push<bool>(
       context,
-      title: 'Zaključiti smjenu?',
-      action: 'Zaključi smjenu',
-      color: ModeColors.stanje,
-      content: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (anomalies.isNotEmpty) ...[
-            Text(
-              'Prebrojano je više nego što je bilo. Provjerite brojanje ili ULAZ:',
-              style: TextStyle(
-                color: Theme.of(context).colorScheme.error,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 4),
-            for (final l in anomalies)
-              Text('${l.name}: bilo ${l.total}, uneseno ${l.closing}'),
-            const SizedBox(height: 12),
-          ],
-          const Text('Nakon zaključenja se smjena više ne može mijenjati.'),
-        ],
-      ),
+      MaterialPageRoute(builder: (_) => PredajaScreen(shiftId: widget.shiftId)),
     );
-    if (!ok || !mounted) return;
-    final closed = await guard(
-      context,
-      () => RepoScope.of(context).closeShift(widget.shiftId),
-    );
-    if (closed && mounted) Navigator.pop(context, true);
+    if (closed == true && mounted) Navigator.pop(context, true);
   }
 
   @override
@@ -100,8 +75,8 @@ class _StanjeScreenState extends State<StanjeScreen> {
           color: ModeColors.stanje,
           bottom: ModeButton(
             color: ModeColors.stanje,
-            onPressed: missing > 0 ? null : () => _close(obracun),
-            label: missing > 0 ? 'Još $missing za unijeti' : 'Zaključi smjenu',
+            onPressed: missing > 0 ? null : _toHandover,
+            label: missing > 0 ? 'Još $missing za unijeti' : 'Dalje: predaja',
           ),
           body: Column(
             children: [

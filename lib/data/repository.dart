@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 
 import '../domain/obracun.dart';
+import '../domain/report.dart';
 import '../domain/stats.dart';
 import '../sync/remote_shift.dart';
 import 'admin_data.dart';
@@ -117,6 +118,8 @@ class Repository extends ChangeNotifier implements AdminData {
     required int price,
     int initialQty = 0,
     String? imageId,
+    int? minQty,
+    int? parQty,
   }) async {
     if (name.trim().isEmpty) throw SankoException('Unesite naziv artikla.');
     await _db.transaction((txn) async {
@@ -134,6 +137,8 @@ class Repository extends ChangeNotifier implements AdminData {
         'sort_order': sortOrder,
         'created_at': _nowMs,
         'image_id': imageId,
+        'min_qty': minQty,
+        'par_qty': parQty,
       });
       // Artikal dodan usred smjene ulazi odmah u nju, da ga konobar može primiti i prebrojati.
       final open = await txn.query('shifts', where: 'closed_at IS NULL');
@@ -166,6 +171,8 @@ class Repository extends ChangeNotifier implements AdminData {
         'price': item.price,
         'initial_qty': item.initialQty,
         'image_id': item.imageId,
+        'min_qty': item.minQty,
+        'par_qty': item.parQty,
       },
       where: 'id = ?',
       whereArgs: [item.id],
@@ -273,8 +280,9 @@ class Repository extends ChangeNotifier implements AdminData {
     await _changed(shiftId);
   }
 
-  /// Zaključuje smjenu. Nakon ovoga se smjena više ne može mijenjati.
-  Future<void> closeShift(String shiftId) async {
+  /// Zaključuje smjenu sa kuhinjom i predajom novca. Nakon ovoga se smjena više
+  /// ne može mijenjati.
+  Future<void> closeShift(String shiftId, {Handover? handover}) async {
     await _db.transaction((txn) async {
       final shift = await txn.query(
         'shifts',
@@ -301,15 +309,121 @@ class Repository extends ChangeNotifier implements AdminData {
           'Imate ULAZ koji nije zaključen. Zaključite ga ili obrišite unose.',
         );
       }
+      if (handover != null) _checkHandover(handover);
       await txn.update(
         'shifts',
-        {'closed_at': _nowMs},
+        {
+          'closed_at': _nowMs,
+          'kitchen': handover?.kitchen,
+          'cash': handover?.cash,
+          'card': handover?.card,
+        },
         where: 'id = ?',
         whereArgs: [shiftId],
       );
     });
     await _changed(shiftId);
   }
+
+  void _checkHandover(Handover h) {
+    if (h.kitchen < 0 || h.cash < 0 || h.card < 0) {
+      throw SankoException('Iznos ne može biti negativan.');
+    }
+  }
+
+  @override
+  Future<void> setHandover(
+    String shiftId,
+    Handover handover, {
+    String? note,
+  }) async {
+    _checkHandover(handover);
+    final shift = (await _db.query(
+      'shifts',
+      where: 'id = ?',
+      whereArgs: [shiftId],
+    )).single;
+    if (shift['closed_at'] == null) {
+      throw SankoException(
+        'Smjena još nije zaključena; predaju unosi konobar pri zaključenju.',
+      );
+    }
+    final cleanNote = note?.trim().isEmpty ?? true ? null : note!.trim();
+    await _db.transaction((txn) async {
+      for (final (label, field, value) in [
+        ('Kuhinja', CorrectionField.kitchen, handover.kitchen),
+        ('Gotovina', CorrectionField.cash, handover.cash),
+        ('Kartice', CorrectionField.card, handover.card),
+      ]) {
+        final old = shift[field.name] as int?;
+        if (old == value) continue;
+        await txn.insert('corrections', {
+          'id': _uuid.v4(),
+          'shift_id': shiftId,
+          'item_name': label,
+          'field': field.name,
+          'old_value': old,
+          'new_value': value,
+          'note': cleanNote,
+          'corrected_at': _nowMs,
+        });
+      }
+      await txn.update(
+        'shifts',
+        {
+          'kitchen': handover.kitchen,
+          'cash': handover.cash,
+          'card': handover.card,
+        },
+        where: 'id = ?',
+        whereArgs: [shiftId],
+      );
+    });
+    notifyListeners();
+  }
+
+  @override
+  Future<List<ShiftSummary>> shiftSummaries(DateTime from, DateTime to) async {
+    final rows = await _db.rawQuery(
+      '$_shiftSelect WHERE s.closed_at IS NOT NULL AND s.business_date BETWEEN ? AND ? '
+      'ORDER BY s.business_date, s.seq',
+      [_dateKey(from), _dateKey(to)],
+    );
+    final summaries = <ShiftSummary>[];
+    for (final r in rows) {
+      final o = await obracunForShift(r['id'] as String);
+      summaries.add(
+        ShiftSummary(
+          shiftId: r['id'] as String,
+          businessDate: DateTime.parse(r['business_date'] as String),
+          seq: r['seq'] as int,
+          workerName: r['worker_name'] as String,
+          sank: o.sank,
+          expenses: o.expenses,
+          kitchen: r['kitchen'] as int?,
+          cash: r['cash'] as int?,
+          card: r['card'] as int?,
+          anomalies: [
+            for (final l in o.lines)
+              if (l.hasAnomaly) l.name,
+          ],
+        ),
+      );
+    }
+    return summaries;
+  }
+
+  // Telegram radi samo kroz server; lokalna baza ga nema.
+  @override
+  Future<TelegramStatus> telegramStatus() async =>
+      const TelegramStatus(bot: null, chats: []);
+
+  @override
+  Future<String> telegramLink() async =>
+      throw SankoException('Telegram obavještenja rade samo uz server.');
+
+  @override
+  Future<void> telegramUnlink() async {}
 
   /// Povećava reviziju smjene, po kojoj sinhronizacija zna da ima šta poslati.
   Future<void> _changed(String shiftId) async {
@@ -323,7 +437,7 @@ class Repository extends ChangeNotifier implements AdminData {
   Future<List<StatLine>> statLines(DateTime from, DateTime to) async {
     final rows = await _db.rawQuery(
       '''
-      SELECT l.item_id, l.item_name, l.kind, l.sort_order, l.opening_qty, l.closing_qty,
+      SELECT l.item_id, l.item_name, l.kind, l.price, l.sort_order, l.opening_qty, l.closing_qty,
         s.business_date, s.id AS shift_id, s.seq, w.name AS worker_name,
         (SELECT COALESCE(SUM(rl.qty), 0)
          FROM receipt_lines rl JOIN receipts r ON r.id = rl.receipt_id
@@ -349,6 +463,7 @@ class Repository extends ChangeNotifier implements AdminData {
           seq: r['seq'] as int,
           workerName: r['worker_name'] as String,
           received: r['received'] as int,
+          price: r['price'] as int,
           consumed: ObracunLine.forShift(
             itemId: r['item_id'] as String,
             name: r['item_name'] as String,
@@ -475,8 +590,8 @@ class Repository extends ChangeNotifier implements AdminData {
         ShiftCorrection(
           shiftId: r['shift_id'] as String,
           itemName: r['item_name'] as String,
-          isClosing: r['field'] == 'closing',
-          oldValue: r['old_value'] as int,
+          field: CorrectionField.values.byName(r['field'] as String),
+          oldValue: r['old_value'] as int?,
           newValue: r['new_value'] as int,
           note: r['note'] as String?,
           correctedAt: DateTime.fromMillisecondsSinceEpoch(
@@ -517,7 +632,11 @@ class Repository extends ChangeNotifier implements AdminData {
   }
 
   @override
-  Future<void> adminCloseShift(String shiftId, Map<String, int> counts) async {
+  Future<void> adminCloseShift(
+    String shiftId,
+    Map<String, int> counts, {
+    Handover? handover,
+  }) async {
     await _requireOpen(shiftId);
     await _db.transaction((txn) async {
       for (final e in counts.entries) {
@@ -542,7 +661,7 @@ class Repository extends ChangeNotifier implements AdminData {
         whereArgs: [shiftId],
       );
     });
-    await closeShift(shiftId);
+    await closeShift(shiftId, handover: handover);
   }
 
   Future<void> _requireOpen(String shiftId) async {
@@ -693,7 +812,11 @@ class Repository extends ChangeNotifier implements AdminData {
       'SELECT COALESCE(SUM(amount), 0) AS n FROM expenses WHERE shift_id = ?',
       [shiftId],
     );
+    final handover = await _handover(shiftId);
     return Obracun(
+      kitchen: handover['kitchen'] as int? ?? 0,
+      cash: handover['cash'] as int?,
+      card: handover['card'] as int?,
       lines: [
         for (final r in rows)
           ObracunLine.forShift(
@@ -710,6 +833,15 @@ class Repository extends ChangeNotifier implements AdminData {
     );
   }
 
+  /// Kuhinja i predaja smjene, kako su upisane u bazi.
+  Future<Map<String, Object?>> _handover(String shiftId) async =>
+      (await _db.query(
+        'shifts',
+        columns: ['kitchen', 'cash', 'card'],
+        where: 'id = ?',
+        whereArgs: [shiftId],
+      )).single;
+
   Future<Obracun> obracunForDay(DateTime day) async {
     final shifts = await shiftsOn(day);
     return Obracun.forDay([
@@ -719,7 +851,6 @@ class Repository extends ChangeNotifier implements AdminData {
 
   // --- Primjer podataka ---
 
-  /// Artikli i stanja iz primjera knjige šanka, za isprobavanje.
   @override
   Future<void> addItems(List<NewItem> items) async {
     for (final i in items) {
@@ -733,6 +864,7 @@ class Repository extends ChangeNotifier implements AdminData {
     }
   }
 
+  /// Artikli i stanja iz primjera knjige šanka, za isprobavanje.
   @override
   Future<void> seedDemoItems() async {
     for (final (name, kind, price, qty) in demoItems) {
@@ -795,6 +927,7 @@ class Repository extends ChangeNotifier implements AdminData {
   /// Cijelo stanje smjene, u obliku koji se šalje na server.
   Future<RemoteShift> exportShift(String shiftId) async {
     final shift = await shiftById(shiftId);
+    final handover = await _handover(shiftId);
     final lines = await _db.rawQuery(
       '''
       SELECT l.*, i.image_id FROM shift_lines l JOIN items i ON i.id = l.item_id
@@ -826,6 +959,9 @@ class Repository extends ChangeNotifier implements AdminData {
       seq: shift.seq,
       openedAt: shift.openedAt,
       closedAt: shift.closedAt,
+      kitchen: handover['kitchen'] as int?,
+      cash: handover['cash'] as int?,
+      card: handover['card'] as int?,
       lines: [
         for (final l in lines)
           RemoteLine(
@@ -892,6 +1028,9 @@ class Repository extends ChangeNotifier implements AdminData {
           'seq': remote.seq,
           'opened_at': remote.openedAt.millisecondsSinceEpoch,
           'closed_at': remote.closedAt?.millisecondsSinceEpoch,
+          'kitchen': remote.kitchen,
+          'cash': remote.cash,
+          'card': remote.card,
         });
         changed = true;
       }
@@ -968,7 +1107,13 @@ class Repository extends ChangeNotifier implements AdminData {
         }
         await txn.update(
           'shifts',
-          {'closed_at': remote.closedAt!.millisecondsSinceEpoch, 'dirty': 0},
+          {
+            'closed_at': remote.closedAt!.millisecondsSinceEpoch,
+            'dirty': 0,
+            'kitchen': remote.kitchen,
+            'cash': remote.cash,
+            'card': remote.card,
+          },
           where: 'id = ?',
           whereArgs: [remote.id],
         );

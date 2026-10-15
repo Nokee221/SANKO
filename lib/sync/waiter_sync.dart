@@ -121,7 +121,7 @@ class WaiterSync extends ChangeNotifier {
       final remote = await _backend.startShift(const Uuid().v4());
       await _repo.importShift(remote);
       await _syncImages(refresh: true);
-      return _repo.shiftById(remote.id);
+      return await _repo.shiftById(remote.id);
     } on OfflineException {
       throw SankoException('Za početak smjene je potreban internet.');
     }

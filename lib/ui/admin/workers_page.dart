@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import '../../data/models.dart';
 import '../common.dart';
 import '../theme.dart';
+import 'layout.dart';
 import 'scope.dart';
 import 'widgets.dart';
 
@@ -60,7 +61,7 @@ class WorkersPage extends StatelessWidget {
                 );
               }
               return ListView(
-                padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+                padding: pagePadding(context),
                 children: [
                   Align(
                     alignment: Alignment.topLeft,
@@ -158,6 +159,7 @@ class _WorkerDialogState extends State<_WorkerDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
+      scrollable: true,
       title: const Text('Novi radnik'),
       content: SizedBox(
         width: 320,
@@ -178,6 +180,7 @@ class _WorkerDialogState extends State<_WorkerDialog> {
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: const InputDecoration(
                 labelText: 'PIN (4 cifre)',
+                helperMaxLines: 2,
                 helperText: 'PIN se kasnije ne može vidjeti; zapišite ga.',
               ),
               onSubmitted: (_) => _save(),

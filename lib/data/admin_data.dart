@@ -1,6 +1,7 @@
 import 'package:flutter/foundation.dart';
 
 import '../domain/obracun.dart';
+import '../domain/report.dart';
 import '../domain/stats.dart';
 import 'models.dart';
 
@@ -20,7 +21,10 @@ abstract interface class AdminData implements Listenable {
     required int price,
     int initialQty,
     String? imageId,
+    int? minQty,
+    int? parQty,
   });
+
   /// Upisuje više artikala odjednom, redom iza postojećih; npr. uvoz iz Excela.
   Future<void> addItems(List<NewItem> items);
   Future<void> updateItem(Item item);
@@ -51,8 +55,28 @@ abstract interface class AdminData implements Listenable {
   Future<List<StockLevel>> currentStock();
 
   /// Zaključuje smjenu umjesto konobara. [counts] je stanje po artiklu koje gazda unosi;
-  /// za ostale artikle važi ono što je telefon već poslao.
-  Future<void> adminCloseShift(String shiftId, Map<String, int> counts);
+  /// za ostale artikle važi ono što je telefon već poslao. Uz [handover] se upisuje
+  /// i kuhinja i predaja novca.
+  Future<void> adminCloseShift(
+    String shiftId,
+    Map<String, int> counts, {
+    Handover? handover,
+  });
+
+  /// Ispravlja kuhinju i predaju zaključene smjene; promjena se zapisuje.
+  Future<void> setHandover(String shiftId, Handover handover, {String? note});
+
+  /// Zbirovi zaključenih smjena od [from] do [to], uključivo, najstarije prve.
+  Future<List<ShiftSummary>> shiftSummaries(DateTime from, DateTime to);
+
+  /// Veza lokala sa Telegramom za obavještenja.
+  Future<TelegramStatus> telegramStatus();
+
+  /// Link koji gazda otvori u Telegramu da poveže razgovor sa lokalom.
+  Future<String> telegramLink();
+
+  /// Gasi obavještenja za sve povezane razgovore lokala.
+  Future<void> telegramUnlink();
 
   /// Ponovo učitava prikaz, npr. na dugme "Osvježi".
   void refresh();

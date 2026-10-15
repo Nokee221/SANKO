@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../data/errors.dart';
 import '../../data/models.dart';
@@ -53,6 +54,14 @@ class _DarkPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Ploča je ispod statusne trake, pa njene ikone trebaju biti svijetle.
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      value: SystemUiOverlayStyle.light,
+      child: _panel(),
+    );
+  }
+
+  Widget _panel() {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -611,12 +620,44 @@ class _Summary extends StatelessWidget {
                           ),
                           Expanded(
                             child: _Stat(
+                              label: 'Kuhinja',
+                              value: fmtKm(o.kitchen),
+                            ),
+                          ),
+                          Expanded(
+                            child: _Stat(
                               label: 'Rashod',
                               value: fmtKm(o.expenses),
                             ),
                           ),
                         ],
                       ),
+                      if (o.difference case final difference?) ...[
+                        const SizedBox(height: 14),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _Stat(
+                                label: 'Predano',
+                                value: fmtKm(o.handedOver!),
+                              ),
+                            ),
+                            Expanded(
+                              flex: 2,
+                              child: _Stat(
+                                label: difference < 0
+                                    ? 'Manjak'
+                                    : difference > 0
+                                    ? 'Višak'
+                                    : 'Razlika',
+                                value: difference == 0
+                                    ? 'nema'
+                                    : fmtKm(difference.abs()),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 18),
                       const _SyncPill(),
                     ],
@@ -712,6 +753,11 @@ class _Stat extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Razmak do susjedne kolone, i kad iznos ispuni svoju širinu.
+    return Padding(padding: const EdgeInsets.only(right: 12), child: _column());
+  }
+
+  Widget _column() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -719,13 +765,18 @@ class _Stat extends StatelessWidget {
           label,
           style: const TextStyle(color: Colors.white70, fontSize: 14),
         ),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 19,
-            fontWeight: FontWeight.w700,
-            fontFeatures: tabularFigures,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: Alignment.centerLeft,
+          child: Text(
+            value,
+            maxLines: 1,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+              fontFeatures: tabularFigures,
+            ),
           ),
         ),
       ],

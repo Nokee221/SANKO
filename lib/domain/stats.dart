@@ -13,6 +13,7 @@ class StatLine {
     required this.workerName,
     required this.consumed,
     required this.received,
+    this.price = 0,
   });
 
   /// Red iz admin_stat_lines.
@@ -27,6 +28,8 @@ class StatLine {
     workerName: j['worker_name'] as String,
     consumed: j['consumed'] as int,
     received: j['received'] as int,
+    // Starija baza ne vraća cijenu; tada promet po artiklu nije poznat.
+    price: j['price'] as int? ?? 0,
   );
 
   final String itemId;
@@ -39,6 +42,9 @@ class StatLine {
   final String workerName;
   final int consumed;
   final int received;
+
+  /// Cijena u smjeni, u feninzima.
+  final int price;
 }
 
 /// Koliko smjena istorije treba prije nego što se prosjek uzme kao mjerilo.
@@ -212,8 +218,13 @@ class StockForecast {
   }
 }
 
-/// Procjena zalihe za sve artikle; najkritičniji prvi.
-List<StockForecast> forecastStock(List<StockLevel> levels, ItemStats stats) {
+/// Procjena zalihe za sve artikle; najkritičniji prvi. Artikal sa minimumom
+/// iz [minimums] je nizak čim zaliha padne na minimum.
+List<StockForecast> forecastStock(
+  List<StockLevel> levels,
+  ItemStats stats, {
+  Map<String, int> minimums = const {},
+}) {
   final enough = stats.days >= minHistory;
   final forecasts = [
     for (final level in levels)
@@ -225,6 +236,7 @@ List<StockForecast> forecastStock(List<StockLevel> levels, ItemStats stats) {
           perDay: perDay,
           isLow:
               level.stock <= 0 ||
+              level.stock <= (minimums[level.itemId] ?? -1) ||
               (enough && daysLeft != null && daysLeft < lowStockDays),
         );
       }(),

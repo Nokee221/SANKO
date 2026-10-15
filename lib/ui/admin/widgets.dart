@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+import 'layout.dart';
 
 /// Znak aplikacije (šoljica u krugu).
 class Logo extends StatelessWidget {
@@ -35,6 +36,7 @@ class PageHeader extends StatelessWidget {
       letterSpacing: -0.8,
       color: SankoColors.ink,
     );
+    if (isCompact(context)) return _compact(context, style);
     return Padding(
       padding: const EdgeInsets.fromLTRB(32, 28, 32, 20),
       child: LayoutBuilder(
@@ -58,6 +60,51 @@ class PageHeader extends StatelessWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+extension on PageHeader {
+  /// Telefon: naslov sa dugmetom nazad kad je stranica otvorena iz menija, a
+  /// kontrole u redu ispod koji se pomjera vodoravno.
+  Widget _compact(BuildContext context, TextStyle style) {
+    final canPop = ModalRoute.of(context)?.canPop ?? false;
+    // Razmaknica nema smisla u redu bez kraja.
+    final controls = children.where((w) => w is! Spacer).toList();
+    // Same ikone (npr. osvježi) stanu desno od naslova.
+    final iconsOnly =
+        controls.isNotEmpty && controls.every((w) => w is IconButton);
+    return SafeArea(
+      bottom: false,
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(canPop ? 4 : 16, 12, 16, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                if (canPop) const BackButton(),
+                Expanded(
+                  child: Text(
+                    title,
+                    overflow: TextOverflow.ellipsis,
+                    style: style.copyWith(fontSize: 26),
+                  ),
+                ),
+                if (iconsOnly) ...controls,
+              ],
+            ),
+            if (controls.isNotEmpty && !iconsOnly) ...[
+              const SizedBox(height: 10),
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: EdgeInsets.only(left: canPop ? 12 : 0),
+                child: Row(children: controls),
+              ),
+            ],
+          ],
+        ),
       ),
     );
   }

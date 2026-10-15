@@ -6,6 +6,7 @@ import '../../domain/item_import.dart';
 import '../common.dart';
 import '../format.dart';
 import '../theme.dart';
+import 'layout.dart';
 import 'scope.dart';
 
 /// Gazda bira .xlsx fajl, pregleda pročitane artikle i dodaje označene.
@@ -16,7 +17,15 @@ Future<void> importItemsFromExcel(
 }) async {
   final file = await openFile(
     acceptedTypeGroups: const [
-      XTypeGroup(label: 'Excel', extensions: ['xlsx']),
+      // Android bira fajl po MIME tipu, iPhone po UTI, računar po ekstenziji.
+      XTypeGroup(
+        label: 'Excel',
+        extensions: ['xlsx'],
+        mimeTypes: [
+          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ],
+        uniformTypeIdentifiers: ['org.openxmlformats.spreadsheetml.sheet'],
+      ),
     ],
   );
   if (file == null || !context.mounted) return;
@@ -118,7 +127,79 @@ class _ImportDialogState extends State<_ImportDialog> {
     );
   }
 
+  /// Telefon: naziv, pa ispod njega vrsta, stanje i cijena.
+  Widget _compactRow(_Row r) {
+    const muted = TextStyle(color: SankoColors.muted, fontSize: 13);
+    final price = r.item.price;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Checkbox(
+            value: r.selected,
+            onChanged: price == null
+                ? null
+                : (v) => setState(() => r.selected = v ?? false),
+          ),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const SizedBox(height: 6),
+                Text(
+                  r.item.name,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Row(
+                  children: [
+                    DropdownButton<ItemKind>(
+                      value: r.kind,
+                      isDense: true,
+                      underline: const SizedBox(),
+                      style: const TextStyle(
+                        fontSize: 13,
+                        color: SankoColors.ink,
+                        fontFamily: 'Manrope',
+                      ),
+                      items: const [
+                        DropdownMenuItem(
+                          value: ItemKind.stock,
+                          child: Text('komadi'),
+                        ),
+                        DropdownMenuItem(
+                          value: ItemKind.counter,
+                          child: Text('brojač'),
+                        ),
+                      ],
+                      onChanged: (k) => setState(() => r.kind = k!),
+                    ),
+                    const Spacer(),
+                    Text(
+                      'stanje ${r.item.qty} · '
+                      '${price == null ? 'bez cijene' : fmtKm(price)}',
+                      style: const TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        fontFeatures: tabularFigures,
+                      ),
+                    ),
+                  ],
+                ),
+                if (r.note case final note?) Text(note, style: muted),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _row(_Row r) {
+    if (isCompact(context)) return _compactRow(r);
     const muted = TextStyle(color: SankoColors.muted, fontSize: 13);
     const number = TextStyle(fontSize: 15, fontFeatures: tabularFigures);
     final price = r.item.price;
@@ -223,25 +304,29 @@ class _ImportDialogState extends State<_ImportDialog> {
                         }),
                 ),
                 const SizedBox(width: 4),
-                const Expanded(child: Text('Naziv', style: head)),
-                const SizedBox(width: 170, child: Text('Vrsta', style: head)),
-                const SizedBox(
-                  width: 110,
-                  child: Text(
-                    'Stanje',
-                    textAlign: TextAlign.right,
-                    style: head,
+                if (isCompact(context))
+                  const Expanded(child: Text('Označi sve', style: head))
+                else ...[
+                  const Expanded(child: Text('Naziv', style: head)),
+                  const SizedBox(width: 170, child: Text('Vrsta', style: head)),
+                  const SizedBox(
+                    width: 110,
+                    child: Text(
+                      'Stanje',
+                      textAlign: TextAlign.right,
+                      style: head,
+                    ),
                   ),
-                ),
-                const SizedBox(
-                  width: 110,
-                  child: Text(
-                    'Cijena',
-                    textAlign: TextAlign.right,
-                    style: head,
+                  const SizedBox(
+                    width: 110,
+                    child: Text(
+                      'Cijena',
+                      textAlign: TextAlign.right,
+                      style: head,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 8),
+                ],
               ],
             ),
             const Divider(),

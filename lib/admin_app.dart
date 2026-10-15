@@ -5,12 +5,12 @@ import 'app.dart';
 import 'config.dart';
 import 'data/admin_data.dart';
 import 'data/errors.dart';
+import 'ui/admin/account.dart';
 import 'ui/admin/admin_session.dart';
 import 'ui/admin/admin_shell.dart';
+import 'ui/admin/mobile_shell.dart';
 import 'ui/admin/scope.dart';
 import 'ui/admin/widgets.dart';
-import 'ui/common.dart';
-import 'ui/format.dart';
 import 'ui/theme.dart';
 import 'ui/vendor/vendor_panel.dart';
 import 'vendor/vendor_api.dart';
@@ -31,9 +31,20 @@ Widget withAdminScopes(Widget app, {AdminData? data, VendorApi? vendorApi}) {
 }
 
 class AdminApp extends StatelessWidget {
-  const AdminApp({super.key, required this.session});
+  const AdminApp({
+    super.key,
+    required this.session,
+    this.mobile = false,
+    this.onSwitchToWaiter,
+  });
 
   final AdminSession session;
+
+  /// Telefon gazde: stranice sa navigacijom na dnu umjesto bočne trake.
+  final bool mobile;
+
+  /// Na telefonu: prelazak na aplikaciju za konobara.
+  final VoidCallback? onSwitchToWaiter;
 
   @override
   Widget build(BuildContext context) {
@@ -56,12 +67,20 @@ class AdminApp extends StatelessWidget {
   }
 
   Widget _home() {
-    if (!session.signedIn) return _LoginScreen(session: session);
+    if (!session.signedIn) {
+      return _LoginScreen(session: session, onSwitchToWaiter: onSwitchToWaiter);
+    }
     if (session.loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final venue = session.venue;
     if (session.isVendor) {
+      if (mobile) {
+        return _Message(
+          text: 'Panel prodavca radi na računaru.',
+          session: session,
+        );
+      }
       return VendorPanel(footer: _Footer(session: session));
     }
     if (venue == null) {
@@ -70,10 +89,18 @@ class AdminApp extends StatelessWidget {
         session: session,
       );
     }
+    if (mobile) {
+      return MobileAdminShell(
+        key: ValueKey(venue.id),
+        venueName: venue.name,
+        session: session,
+        onSwitchToWaiter: onSwitchToWaiter,
+      );
+    }
     return AdminShell(
       key: ValueKey(venue.id),
       venueName: venue.name,
-      header: _VenueCard(session: session),
+      header: VenueCard(session: session),
       footer: _Footer(session: session),
     );
   }
@@ -106,7 +133,7 @@ class _Footer extends StatelessWidget {
               color: Colors.white70,
               onPressed: () => showDialog<void>(
                 context: context,
-                builder: (_) => _PasswordDialog(session: session),
+                builder: (_) => PasswordDialog(session: session),
               ),
             ),
             IconButton(
@@ -118,163 +145,6 @@ class _Footer extends StatelessWidget {
           ],
         ),
       ],
-    );
-  }
-}
-
-class _PasswordDialog extends StatefulWidget {
-  const _PasswordDialog({required this.session});
-
-  final AdminSession session;
-
-  @override
-  State<_PasswordDialog> createState() => _PasswordDialogState();
-}
-
-class _PasswordDialogState extends State<_PasswordDialog> {
-  final _password = TextEditingController();
-  final _repeat = TextEditingController();
-  bool _busy = false;
-
-  @override
-  void dispose() {
-    _password.dispose();
-    _repeat.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    if (_password.text != _repeat.text) {
-      showError(context, 'Lozinke se ne poklapaju.');
-      return;
-    }
-    setState(() => _busy = true);
-    final saved = await guard(
-      context,
-      () => widget.session.changePassword(_password.text),
-    );
-    if (!mounted) return;
-    setState(() => _busy = false);
-    if (!saved) return;
-    Navigator.pop(context);
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Lozinka je promijenjena.')));
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Promijeni lozinku'),
-      content: SizedBox(
-        width: 360,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _password,
-              obscureText: true,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Nova lozinka (bar 8 znakova)',
-              ),
-            ),
-            const SizedBox(height: 10),
-            TextField(
-              controller: _repeat,
-              obscureText: true,
-              decoration: const InputDecoration(labelText: 'Ponovi lozinku'),
-              onSubmitted: (_) => _save(),
-            ),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: _busy ? null : () => Navigator.pop(context),
-          child: const Text('Odustani'),
-        ),
-        FilledButton(
-          onPressed: _busy ? null : _save,
-          child: const Text('Sačuvaj'),
-        ),
-      ],
-    );
-  }
-}
-
-/// Lokal koji gazda gleda: naziv, kod za telefone i do kada je plaćeno.
-class _VenueCard extends StatelessWidget {
-  const _VenueCard({required this.session});
-
-  final AdminSession session;
-
-  @override
-  Widget build(BuildContext context) {
-    final venue = session.venue!;
-    final expired = venue.paidUntil.isBefore(dateOnly(DateTime.now()));
-    const name = TextStyle(
-      color: Colors.white,
-      fontSize: 17,
-      fontWeight: FontWeight.w700,
-    );
-    return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-      decoration: BoxDecoration(
-        color: SankoColors.navyRaised,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          if (session.venues.length > 1)
-            DropdownButton<String>(
-              value: venue.id,
-              isExpanded: true,
-              isDense: true,
-              underline: const SizedBox(),
-              dropdownColor: SankoColors.navyRaised,
-              iconEnabledColor: Colors.white70,
-              style: name,
-              items: [
-                for (final v in session.venues)
-                  DropdownMenuItem(value: v.id, child: Text(v.name)),
-              ],
-              onChanged: (id) =>
-                  session.select(session.venues.firstWhere((v) => v.id == id)),
-            )
-          else
-            Text(venue.name, style: name),
-          const SizedBox(height: 10),
-          const Text(
-            'Kod za telefone',
-            style: TextStyle(color: Colors.white60, fontSize: 12),
-          ),
-          Tooltip(
-            message: 'Konobari ovaj kod jednom ukucaju na svom telefonu',
-            child: SelectableText(
-              venue.code,
-              style: const TextStyle(
-                color: SankoColors.brass,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 3,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            expired
-                ? 'Pretplata je istekla'
-                : 'Plaćeno do ${fmtDate(venue.paidUntil)}',
-            style: TextStyle(
-              color: expired ? SankoColors.failed : Colors.white60,
-              fontSize: 12,
-              fontWeight: expired ? FontWeight.w700 : FontWeight.w400,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -307,9 +177,12 @@ class _Message extends StatelessWidget {
 }
 
 class _LoginScreen extends StatefulWidget {
-  const _LoginScreen({required this.session});
+  const _LoginScreen({required this.session, this.onSwitchToWaiter});
 
   final AdminSession session;
+
+  /// Na telefonu: konobar se ne prijavljuje e-mailom, nego kodom lokala i PIN-om.
+  final VoidCallback? onSwitchToWaiter;
 
   @override
   State<_LoginScreen> createState() => _LoginScreenState();
@@ -386,7 +259,8 @@ class _LoginScreenState extends State<_LoginScreen> {
             child: Center(
               child: ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 380),
-                child: Padding(
+                // Na telefonu tastatura zauzme pola ekrana, pa se forma pomjera.
+                child: SingleChildScrollView(
                   padding: const EdgeInsets.all(24),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -407,7 +281,7 @@ class _LoginScreenState extends State<_LoginScreen> {
                       ),
                       const SizedBox(height: 4),
                       const Text(
-                        'Admin panel za vlasnike lokala',
+                        'Za vlasnike i menadžere lokala',
                         style: TextStyle(
                           fontSize: 16,
                           color: SankoColors.muted,
@@ -454,6 +328,17 @@ class _LoginScreenState extends State<_LoginScreen> {
                               : const Text('Prijavi se'),
                         ),
                       ),
+                      if (widget.onSwitchToWaiter != null) ...[
+                        const SizedBox(height: 16),
+                        Center(
+                          child: TextButton(
+                            onPressed: widget.onSwitchToWaiter,
+                            child: const Text(
+                              'Konobar? Prijava kodom lokala i PIN-om',
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

@@ -84,6 +84,8 @@ ThemeData sankoTheme() {
     dialogTheme: DialogThemeData(
       backgroundColor: Colors.white,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      // Na telefonu dijalog zauzima skoro cijelu širinu ekrana.
+      insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
     ),
     bottomSheetTheme: const BottomSheetThemeData(
       backgroundColor: Colors.white,

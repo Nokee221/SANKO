@@ -36,11 +36,19 @@ class Item {
     this.sortOrder = 0,
     this.active = true,
     this.imageId,
+    this.minQty,
+    this.parQty,
   });
 
   final String id;
   final String name;
   final ItemKind kind;
+
+  /// Zaliha na kojoj artikal ide na listu za narudžbu; null znači da se ne prati.
+  final int? minQty;
+
+  /// Do koliko se naručuje; bez nje se naručuje do dvostrukog minimuma.
+  final int? parQty;
 
   /// Slika iz kataloga; null znači da artikal nema sliku.
   final String? imageId;
@@ -61,6 +69,8 @@ class Item {
     sortOrder: r['sort_order'] as int,
     imageId: r['image_id'] as String?,
     active: r['active'] as bool,
+    minQty: r['min_qty'] as int?,
+    parQty: r['par_qty'] as int?,
   );
 
   factory Item.fromRow(Map<String, Object?> r) => Item(
@@ -72,6 +82,8 @@ class Item {
     sortOrder: r['sort_order'] as int,
     imageId: r['image_id'] as String?,
     active: r['active'] == 1,
+    minQty: r['min_qty'] as int?,
+    parQty: r['par_qty'] as int?,
   );
 }
 
@@ -209,12 +221,60 @@ class ItemCorrection {
   final int? received;
 }
 
+/// Kuhinja i predaja novca na kraju smjene, u feninzima.
+class Handover {
+  const Handover({
+    required this.kitchen,
+    required this.cash,
+    required this.card,
+  });
+
+  final int kitchen;
+  final int cash;
+  final int card;
+}
+
+/// Telegram veza lokala: bot na serveru (null dok nije podešen) i povezani razgovori.
+class TelegramStatus {
+  const TelegramStatus({required this.bot, required this.chats});
+
+  factory TelegramStatus.fromJson(Map<String, dynamic> j) => TelegramStatus(
+    bot: j['bot'] as String?,
+    chats: [
+      for (final c in j['chats'] as List)
+        (
+          title: c['title'] as String? ?? 'Telegram',
+          linkedAt: DateTime.parse(c['created_at'] as String).toLocal(),
+        ),
+    ],
+  );
+
+  final String? bot;
+  final List<({String title, DateTime linkedAt})> chats;
+}
+
+/// Šta je ispravljeno: ostatak ili primljeno artikla, ili kuhinja i predaja smjene.
+enum CorrectionField {
+  closing('ostatak'),
+  received('primljeno'),
+  kitchen('kuhinja'),
+  cash('gotovina'),
+  card('kartice');
+
+  const CorrectionField(this.label);
+
+  final String label;
+
+  /// Iznos u feninzima, a ne količina.
+  bool get isMoney => index >= kitchen.index;
+}
+
 /// Zapis o jednoj ispravci zaključene smjene.
 class ShiftCorrection {
   const ShiftCorrection({
     required this.shiftId,
     required this.itemName,
-    required this.isClosing,
+    required this.field,
     required this.oldValue,
     required this.newValue,
     required this.note,
@@ -224,19 +284,21 @@ class ShiftCorrection {
   factory ShiftCorrection.fromRemote(Map<String, dynamic> r) => ShiftCorrection(
     shiftId: r['shift_id'] as String,
     itemName: r['item_name'] as String,
-    isClosing: r['field'] == 'closing',
-    oldValue: r['old_value'] as int,
+    field: CorrectionField.values.byName(r['field'] as String),
+    oldValue: r['old_value'] as int?,
     newValue: r['new_value'] as int,
     note: r['note'] as String?,
     correctedAt: DateTime.parse(r['corrected_at'] as String).toLocal(),
   );
 
   final String shiftId;
-  final String itemName;
 
-  /// true za ostatak, false za primljeno.
-  final bool isClosing;
-  final int oldValue;
+  /// Naziv artikla, ili "Kuhinja", "Gotovina", "Kartice" za predaju.
+  final String itemName;
+  final CorrectionField field;
+
+  /// null kad vrijednost ranije nije bila unesena (npr. predaja stare smjene).
+  final int? oldValue;
   final int newValue;
   final String? note;
   final DateTime correctedAt;

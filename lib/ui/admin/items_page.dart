@@ -6,6 +6,7 @@ import '../common.dart';
 import '../format.dart';
 import '../theme.dart';
 import 'item_import_dialog.dart';
+import 'layout.dart';
 import 'scope.dart';
 import 'widgets.dart';
 
@@ -54,6 +55,64 @@ class ItemsPage extends StatelessWidget {
   ) {
     final image = catalog.where((c) => c.id == item.imageId).firstOrNull;
     const muted = TextStyle(color: SankoColors.muted, fontSize: 14);
+    // Telefon: dodir na red otvara izmjenu, a brisanje je u meniju.
+    if (isCompact(context)) {
+      return InkWell(
+        onTap: () => _edit(context, item, catalog),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(14, 10, 0, 10),
+          child: Row(
+            children: [
+              _Thumb(bytes: image?.bytes, size: 44),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      item.name,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      [
+                        if (item.kind == ItemKind.counter) 'brojač',
+                        'početno ${item.initialQty}',
+                        if (item.minQty != null) 'min ${item.minQty}',
+                      ].join(' · '),
+                      style: muted.copyWith(fontSize: 13),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                fmtKm(item.price),
+                style: const TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w800,
+                  fontFeatures: tabularFigures,
+                ),
+              ),
+              PopupMenuButton<bool>(
+                tooltip: 'Više',
+                icon: const Icon(Icons.more_vert, color: SankoColors.muted),
+                onSelected: (edit) => edit
+                    ? _edit(context, item, catalog)
+                    : _remove(context, item),
+                itemBuilder: (_) => const [
+                  PopupMenuItem(value: true, child: Text('Izmijeni')),
+                  PopupMenuItem(value: false, child: Text('Obriši')),
+                ],
+              ),
+            ],
+          ),
+        ),
+      );
+    }
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 8, 10, 8),
       child: Row(
@@ -76,6 +135,10 @@ class ItemsPage extends StatelessWidget {
                 ),
                 const SizedBox(width: 12),
                 Tag(item.kind == ItemKind.counter ? 'Brojač' : 'Zaliha'),
+                if (item.minQty != null) ...[
+                  const SizedBox(width: 8),
+                  Tag('min ${item.minQty}'),
+                ],
               ],
             ),
           ),
@@ -167,8 +230,11 @@ class ItemsPage extends StatelessWidget {
           child: items.isEmpty
               ? EmptyState(
                   text: 'Još nema artikala',
-                  action: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  // Na telefonu dugmad idu jedno ispod drugog.
+                  action: Wrap(
+                    alignment: WrapAlignment.center,
+                    spacing: 12,
+                    runSpacing: 12,
                     children: [
                       FilledButton.icon(
                         icon: const Icon(Icons.upload_file_outlined),
@@ -179,7 +245,6 @@ class ItemsPage extends StatelessWidget {
                           catalog: catalog,
                         ),
                       ),
-                      const SizedBox(width: 12),
                       OutlinedButton(
                         onPressed: () => AdminScope.of(context).seedDemoItems(),
                         child: const Text('Učitaj primjer artikala'),
@@ -188,13 +253,14 @@ class ItemsPage extends StatelessWidget {
                   ),
                 )
               : ListView(
-                  padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+                  padding: pagePadding(context),
                   children: [
                     Align(
                       alignment: Alignment.topLeft,
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(maxWidth: 960),
                         child: Card(
+                          clipBehavior: Clip.antiAlias,
                           child: Column(
                             children: [
                               for (final (i, item) in items.indexed) ...[
@@ -271,6 +337,8 @@ class _ItemDialogState extends State<_ItemDialog> {
   late final _qty = TextEditingController(
     text: '${widget.item?.initialQty ?? ''}',
   );
+  late final _min = TextEditingController(text: '${widget.item?.minQty ?? ''}');
+  late final _par = TextEditingController(text: '${widget.item?.parQty ?? ''}');
   late ItemKind _kind = widget.item?.kind ?? ItemKind.stock;
   late String? _imageId = widget.item?.imageId;
 
@@ -290,6 +358,8 @@ class _ItemDialogState extends State<_ItemDialog> {
     _name.dispose();
     _price.dispose();
     _qty.dispose();
+    _min.dispose();
+    _par.dispose();
     super.dispose();
   }
 
@@ -304,6 +374,21 @@ class _ItemDialogState extends State<_ItemDialog> {
       showError(context, 'Početno stanje mora biti cijeli broj.');
       return;
     }
+    // Brojač nije zaliha i ne naručuje se.
+    final counter = _kind == ItemKind.counter;
+    final min = counter ? null : int.tryParse(_min.text.trim());
+    final par = counter ? null : int.tryParse(_par.text.trim());
+    if (par != null && min == null) {
+      showError(
+        context,
+        'Unesite i minimum; bez njega se artikal ne naručuje.',
+      );
+      return;
+    }
+    if (par != null && par <= min!) {
+      showError(context, '"Naručiti do" mora biti veće od minimuma.');
+      return;
+    }
     final data = AdminScope.of(context);
     final existing = widget.item;
     final saved = await guard(
@@ -315,6 +400,8 @@ class _ItemDialogState extends State<_ItemDialog> {
               price: price,
               initialQty: qty,
               imageId: _imageId,
+              minQty: min,
+              parQty: par,
             )
           : data.updateItem(
               Item(
@@ -324,6 +411,8 @@ class _ItemDialogState extends State<_ItemDialog> {
                 price: price,
                 initialQty: qty,
                 imageId: _imageId,
+                minQty: min,
+                parQty: par,
               ),
             ),
     );
@@ -334,6 +423,7 @@ class _ItemDialogState extends State<_ItemDialog> {
   Widget build(BuildContext context) {
     final counter = _kind == ItemKind.counter;
     return AlertDialog(
+      scrollable: true,
       title: Text(widget.item == null ? 'Novi artikal' : 'Izmjena artikla'),
       content: SizedBox(
         width: 380,
@@ -350,14 +440,17 @@ class _ItemDialogState extends State<_ItemDialog> {
             ),
             const SizedBox(height: 16),
             SegmentedButton<ItemKind>(
-              segments: const [
+              // Na telefonu kraće oznake, da stanu u jedan red.
+              segments: [
                 ButtonSegment(
                   value: ItemKind.stock,
-                  label: Text('Zaliha (komadi)'),
+                  label: Text(
+                    isCompact(context) ? 'Komadi' : 'Zaliha (komadi)',
+                  ),
                 ),
                 ButtonSegment(
                   value: ItemKind.counter,
-                  label: Text('Brojač aparata'),
+                  label: Text(isCompact(context) ? 'Brojač' : 'Brojač aparata'),
                 ),
               ],
               selected: {_kind},
@@ -386,11 +479,44 @@ class _ItemDialogState extends State<_ItemDialog> {
                 labelText: counter
                     ? 'Početno stanje brojača'
                     : 'Početno stanje (komada)',
+                helperMaxLines: 3,
                 helperText: widget.hasHistory
                     ? 'Artikal je već bio u smjeni; stanje se vodi kroz smjene.'
                     : null,
               ),
             ),
+            if (!counter) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _min,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        labelText: 'Minimum',
+                        helperMaxLines: 2,
+                        helperText: 'Na ovoj zalihi ide u narudžbu',
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _par,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                      decoration: const InputDecoration(
+                        labelText: 'Naručiti do',
+                        helperMaxLines: 2,
+                        helperText: 'Prazno: dvostruki minimum',
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             if (widget.catalog.isNotEmpty) ...[
               const SizedBox(height: 16),
               const Text(

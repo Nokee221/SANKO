@@ -96,7 +96,10 @@ void main() {
       amount: 300,
     );
     await count(phone, shift.id, {'KAFA': 149091, 'KOLA': 88});
-    await phone.repo.closeShift(shift.id);
+    await phone.repo.closeShift(
+      shift.id,
+      handover: const Handover(kitchen: 1500, cash: 100000, card: 6000),
+    );
     await phone.sync.pushNow();
 
     expect(phone.sync.hasUnsent, isTrue);
@@ -113,6 +116,11 @@ void main() {
     expect(line(o, 'KOLA').consumed, 13);
     expect(o.sank, 404 * 250 + 13 * 350);
     expect(o.expenses, 300);
+    // Kuhinja i predaja stižu sa smjenom: za predati 1.068,50, predano 1.060,00.
+    expect(o.kitchen, 1500);
+    expect(o.total, o.sank + 1500 - 300);
+    expect(o.handedOver, 106000);
+    expect(o.difference, 106000 - o.total);
   });
 
   test(

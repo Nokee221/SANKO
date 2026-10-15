@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../data/errors.dart';
 import '../common.dart';
@@ -63,93 +64,100 @@ class _PinScreenState extends State<PinScreen> {
   @override
   Widget build(BuildContext context) {
     final sync = SyncScope.of(context);
-    return Scaffold(
-      backgroundColor: SankoColors.navy,
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 360),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 16),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  const Wordmark(),
-                  const SizedBox(height: 6),
-                  Text(
-                    sync.venueName ?? 'Lokal ${sync.venueCode}',
-                    style: const TextStyle(
-                      color: SankoColors.brass,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w600,
+    return AnnotatedRegion<SystemUiOverlayStyle>(
+      // Svijetle ikone statusne trake na tamnoj podlozi.
+      value: SystemUiOverlayStyle.light,
+      child: Scaffold(
+        backgroundColor: SankoColors.navy,
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 360),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 28,
+                  vertical: 16,
+                ),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Wordmark(),
+                    const SizedBox(height: 6),
+                    Text(
+                      sync.venueName ?? 'Lokal ${sync.venueCode}',
+                      style: const TextStyle(
+                        color: SankoColors.brass,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 36),
-                  const Text(
-                    'Unesite svoj PIN',
-                    style: TextStyle(color: Colors.white70, fontSize: 16),
-                  ),
-                  const SizedBox(height: 18),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      for (var i = 0; i < 4; i++)
-                        Container(
-                          width: 16,
-                          height: 16,
-                          margin: const EdgeInsets.symmetric(horizontal: 11),
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: i < _pin.length ? SankoColors.brass : null,
-                            border: Border.all(
-                              color: i < _pin.length
-                                  ? SankoColors.brass
-                                  : Colors.white38,
-                              width: 1.5,
+                    const SizedBox(height: 36),
+                    const Text(
+                      'Unesite svoj PIN',
+                      style: TextStyle(color: Colors.white70, fontSize: 16),
+                    ),
+                    const SizedBox(height: 18),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        for (var i = 0; i < 4; i++)
+                          Container(
+                            width: 16,
+                            height: 16,
+                            margin: const EdgeInsets.symmetric(horizontal: 11),
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: i < _pin.length ? SankoColors.brass : null,
+                              border: Border.all(
+                                color: i < _pin.length
+                                    ? SankoColors.brass
+                                    : Colors.white38,
+                                width: 1.5,
+                              ),
                             ),
                           ),
-                        ),
-                    ],
-                  ),
-                  SizedBox(
-                    height: 60,
-                    child: Center(
-                      child: _busy
-                          ? const SizedBox.square(
-                              dimension: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2.5,
-                                color: SankoColors.brass,
-                              ),
-                            )
-                          : Text(
-                              _error ?? '',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: SankoColors.failed,
-                                fontSize: 15,
-                              ),
-                            ),
+                      ],
                     ),
-                  ),
-                  NumberPad(
-                    dark: true,
-                    onDigit: _onDigit,
-                    onBackspace: () => setState(() {
-                      if (_pin.isNotEmpty) {
-                        _pin = _pin.substring(0, _pin.length - 1);
-                      }
-                    }),
-                  ),
-                  const SizedBox(height: 14),
-                  TextButton(
-                    onPressed: _busy ? null : _changeVenue,
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.white54,
+                    SizedBox(
+                      height: 60,
+                      child: Center(
+                        child: _busy
+                            ? const SizedBox.square(
+                                dimension: 22,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2.5,
+                                  color: SankoColors.brass,
+                                ),
+                              )
+                            : Text(
+                                _error ?? '',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: SankoColors.failed,
+                                  fontSize: 15,
+                                ),
+                              ),
+                      ),
                     ),
-                    child: Text('Promijeni lokal (${sync.venueCode})'),
-                  ),
-                ],
+                    NumberPad(
+                      dark: true,
+                      onDigit: _onDigit,
+                      onBackspace: () => setState(() {
+                        if (_pin.isNotEmpty) {
+                          _pin = _pin.substring(0, _pin.length - 1);
+                        }
+                      }),
+                    ),
+                    const SizedBox(height: 14),
+                    TextButton(
+                      onPressed: _busy ? null : _changeVenue,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white54,
+                      ),
+                      child: Text('Promijeni lokal (${sync.venueCode})'),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

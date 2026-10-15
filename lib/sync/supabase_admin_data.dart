@@ -8,6 +8,7 @@ import '../data/demo_items.dart';
 import '../data/errors.dart';
 import '../data/models.dart';
 import '../domain/obracun.dart';
+import '../domain/report.dart';
 import '../domain/stats.dart';
 import 'supabase_errors.dart';
 
@@ -29,7 +30,11 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
             column: 'venue_id',
             value: venueId,
           ),
-          callback: (_) => notifyListeners(),
+          // Zaključena smjena mijenja i statistiku, pa se ona ponovo učitava.
+          callback: (_) {
+            _stats.clear();
+            notifyListeners();
+          },
         )
         .subscribe();
   }
@@ -77,7 +82,7 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
         final rows = await _client
             .from('catalog_images')
             .select('id, name, data')
-            .order('name');
+            .order('name', ascending: true);
         return [
           for (final r in rows)
             CatalogImage(
@@ -101,7 +106,7 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
         .select()
         .eq('venue_id', venueId)
         .eq('active', true)
-        .order('name');
+        .order('name', ascending: true);
     return [
       for (final r in rows)
         Worker(id: r['id'] as String, name: r['name'] as String),
@@ -128,8 +133,8 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
         .select()
         .eq('venue_id', venueId)
         .eq('active', true)
-        .order('sort_order')
-        .order('name');
+        .order('sort_order', ascending: true)
+        .order('name', ascending: true);
     return rows.map(Item.fromRemote).toList();
   });
 
@@ -150,6 +155,8 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
     required int price,
     int initialQty = 0,
     String? imageId,
+    int? minQty,
+    int? parQty,
   }) {
     if (name.trim().isEmpty) throw SankoException('Unesite naziv artikla.');
     return _write(
@@ -160,6 +167,9 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
         'price': price,
         'initial_qty': initialQty,
         'image_id': imageId,
+        // Starija baza nema minimum; bez njega upis i dalje prolazi.
+        'min_qty': ?minQty,
+        'par_qty': ?parQty,
       }),
     );
   }
@@ -199,6 +209,8 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
             'price': item.price,
             'initial_qty': item.initialQty,
             'image_id': item.imageId,
+            'min_qty': item.minQty,
+            'par_qty': item.parQty,
           })
           .eq('id', item.id),
     );
@@ -231,7 +243,7 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
         .select()
         .eq('venue_id', venueId)
         .eq('business_date', _dateKey(day))
-        .order('seq');
+        .order('seq', ascending: true);
     return rows.map(Shift.fromRemote).toList();
   });
 
@@ -243,15 +255,16 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
         .from('shift_lines')
         .select()
         .eq('shift_id', shiftId)
-        .order('sort_order')
-        .order('item_name');
+        .order('sort_order', ascending: true)
+        .order('item_name', ascending: true);
     final receiptsQuery = _client
         .from('receipts')
         .select('closed_at, receipt_lines(item_id, qty)')
         .eq('shift_id', shiftId)
         .not('closed_at', 'is', null);
-    // Greška ovog upita se hvata niže, kad se sačeka; ovdje ne smije ostati neuhvaćena.
+    // Greška ovih upita se hvata niže, kad se sačekaju; ovdje ne smije ostati neuhvaćena.
     final spentQuery = expenses(shiftId)..ignore();
+    final handoverQuery = _handover(shiftId)..ignore();
     final [lines, receipts] = await Future.wait([linesQuery, receiptsQuery]);
     final received = <String, int>{};
     for (final r in receipts) {
@@ -264,7 +277,11 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
       }
     }
     final spent = await spentQuery;
+    final handover = await handoverQuery;
     return Obracun(
+      kitchen: handover['kitchen'] as int? ?? 0,
+      cash: handover['cash'] as int?,
+      card: handover['card'] as int?,
       lines: [
         for (final l in lines)
           ObracunLine.forShift(
@@ -281,30 +298,109 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
     );
   });
 
+  /// Kuhinja i predaja smjene. Starija baza ih nema; obračun tada radi bez njih.
+  Future<Map<String, dynamic>> _handover(String shiftId) async {
+    try {
+      return await _call(
+        () => _client
+            .from('shifts')
+            .select('kitchen, cash, card')
+            .eq('id', shiftId)
+            .single(),
+      );
+    } on SankoException {
+      return const {};
+    }
+  }
+
   @override
   Future<List<Expense>> expenses(String shiftId) => _call(() async {
     final rows = await _client
         .from('expenses')
         .select()
         .eq('shift_id', shiftId)
-        .order('created_at');
+        .order('created_at', ascending: true);
     return rows.map(Expense.fromRemote).toList();
   });
 
   @override
-  Future<void> adminCloseShift(String shiftId, Map<String, int> counts) =>
+  Future<void> adminCloseShift(
+    String shiftId,
+    Map<String, int> counts, {
+    Handover? handover,
+  }) => _write(
+    () => _client.rpc(
+      'admin_close_shift',
+      params: {
+        'p_shift_id': shiftId,
+        'p_counts': [
+          for (final e in counts.entries)
+            {'item_id': e.key, 'closing_qty': e.value},
+        ],
+        if (handover != null)
+          'p_handover': {
+            'kitchen': handover.kitchen,
+            'cash': handover.cash,
+            'card': handover.card,
+          },
+      },
+    ),
+  );
+
+  @override
+  Future<void> setHandover(String shiftId, Handover handover, {String? note}) =>
       _write(
         () => _client.rpc(
-          'admin_close_shift',
+          'admin_set_handover',
           params: {
             'p_shift_id': shiftId,
-            'p_counts': [
-              for (final e in counts.entries)
-                {'item_id': e.key, 'closing_qty': e.value},
-            ],
+            'p_kitchen': handover.kitchen,
+            'p_cash': handover.cash,
+            'p_card': handover.card,
+            'p_note': note,
           },
         ),
       );
+
+  @override
+  Future<List<ShiftSummary>> shiftSummaries(DateTime from, DateTime to) async {
+    final rows = await _call(
+      () => _client.rpc(
+        'admin_shift_summaries',
+        params: {
+          'p_venue_id': venueId,
+          'p_from': _dateKey(from),
+          'p_to': _dateKey(to),
+        },
+      ),
+    );
+    return [
+      for (final r in rows as List)
+        ShiftSummary.fromJson(r as Map<String, dynamic>),
+    ];
+  }
+
+  @override
+  Future<TelegramStatus> telegramStatus() async {
+    final r = await _call(
+      () =>
+          _client.rpc('admin_telegram_status', params: {'p_venue_id': venueId}),
+    );
+    return TelegramStatus.fromJson(r as Map<String, dynamic>);
+  }
+
+  @override
+  Future<String> telegramLink() async {
+    final url = await _call(
+      () => _client.rpc('admin_telegram_link', params: {'p_venue_id': venueId}),
+    );
+    return url as String;
+  }
+
+  @override
+  Future<void> telegramUnlink() => _write(
+    () => _client.rpc('admin_telegram_unlink', params: {'p_venue_id': venueId}),
+  );
 
   // Istorija se ne mijenja dok se gleda obračun, pa se pamti do sljedećeg osvježavanja.
   final _stats = <String, List<StatLine>>{};
@@ -365,7 +461,7 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
             .from('shift_corrections')
             .select()
             .inFilter('shift_id', shiftIds)
-            .order('corrected_at'),
+            .order('corrected_at', ascending: true),
       );
       return rows.map(ShiftCorrection.fromRemote).toList();
     } on SankoException {

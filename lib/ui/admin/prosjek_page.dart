@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../domain/stats.dart';
 import '../format.dart';
 import '../theme.dart';
+import 'layout.dart';
 import 'scope.dart';
 import 'widgets.dart';
 
@@ -57,7 +58,7 @@ class _ProsjekPageState extends State<ProsjekPage> {
                 );
               }
               return ListView(
-                padding: const EdgeInsets.fromLTRB(32, 0, 32, 32),
+                padding: pagePadding(context),
                 children: [
                   Text(
                     'Zadnjih $_days dana: ${stats.days} '
@@ -161,13 +162,15 @@ class _Anomalies extends StatelessWidget {
                       : SankoColors.ink,
                 ),
                 const SizedBox(width: 10),
-                Text(
-                  anomalies.isEmpty
-                      ? 'Nema neobičnih brojanja u ovom periodu'
-                      : 'Moguće greške u brojanju',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Text(
+                    anomalies.isEmpty
+                        ? 'Nema neobičnih brojanja u ovom periodu'
+                        : 'Moguće greške u brojanju',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -181,41 +184,73 @@ class _Anomalies extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               for (final a in anomalies.take(30))
-                Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    children: [
-                      SizedBox(
-                        width: 220,
-                        child: Text(
-                          '${fmtDate(a.line.businessDate)}, smjena ${a.line.seq}, '
-                          '${a.line.workerName}',
-                          style: muted,
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
+                if (isCompact(context))
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
                           a.line.itemName,
                           style: const TextStyle(
                             fontSize: 15,
                             fontWeight: FontWeight.w700,
                           ),
                         ),
-                      ),
-                      Text(
-                        a.line.consumed < 0
-                            ? 'prebrojano ${-a.line.consumed} više nego što je bilo'
-                            : 'utrošeno ${a.line.consumed}, inače oko '
-                                  '${fmtAvg(a.expected)}',
-                        style: const TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                          fontFeatures: tabularFigures,
+                        Text(
+                          a.line.consumed < 0
+                              ? 'prebrojano ${-a.line.consumed} više nego što je bilo'
+                              : 'utrošeno ${a.line.consumed}, inače oko '
+                                    '${fmtAvg(a.expected)}',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontFeatures: tabularFigures,
+                          ),
                         ),
-                      ),
-                    ],
+                        Text(
+                          '${fmtDate(a.line.businessDate)}, smjena ${a.line.seq}, '
+                          '${a.line.workerName}',
+                          style: muted.copyWith(fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 220,
+                          child: Text(
+                            '${fmtDate(a.line.businessDate)}, smjena ${a.line.seq}, '
+                            '${a.line.workerName}',
+                            style: muted,
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            a.line.itemName,
+                            style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          a.line.consumed < 0
+                              ? 'prebrojano ${-a.line.consumed} više nego što je bilo'
+                              : 'utrošeno ${a.line.consumed}, inače oko '
+                                    '${fmtAvg(a.expected)}',
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
+                            fontFeatures: tabularFigures,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
             ],
           ],
         ),
@@ -251,13 +286,15 @@ class _LowStock extends StatelessWidget {
                       : SankoColors.ink,
                 ),
                 const SizedBox(width: 10),
-                Text(
-                  forecasts.isEmpty
-                      ? 'Zalihe su dovoljne za bar ${lowStockDays.round()} dana'
-                      : 'Niska zaliha',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
+                Expanded(
+                  child: Text(
+                    forecasts.isEmpty
+                        ? 'Zalihe su dovoljne za bar ${lowStockDays.round()} dana'
+                        : 'Niska zaliha',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ),
               ],
@@ -318,8 +355,73 @@ class _AveragesTable extends StatelessWidget {
   final List<ItemAverage> items;
   final Map<String, StockForecast> forecasts;
 
+  /// Telefon: kartica po artiklu umjesto tabele sa devet kolona.
+  Widget _cards() {
+    const muted = TextStyle(
+      color: SankoColors.muted,
+      fontSize: 13,
+      fontFeatures: tabularFigures,
+    );
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (final (n, i) in items.indexed) ...[
+            if (n > 0) const Divider(),
+            Container(
+              color: forecasts[i.itemId]?.isLow ?? false
+                  ? SankoColors.waiting.withValues(alpha: 0.18)
+                  : null,
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          i.name,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${fmtAvg(i.perDay)} / dan',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontFeatures: tabularFigures,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'po smjeni ${fmtAvg(i.perShift)} · najviše ${i.maxShift} · '
+                    'ukupno ${i.consumed}',
+                    style: muted,
+                  ),
+                  if (forecasts[i.itemId] case final f?)
+                    Text(
+                      stockText(f),
+                      style: muted.copyWith(
+                        color: f.isLow ? SankoColors.ink : SankoColors.muted,
+                        fontWeight: f.isLow ? FontWeight.w700 : FontWeight.w500,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    if (isCompact(context)) return _cards();
     const header = TextStyle(
       fontWeight: FontWeight.w700,
       fontSize: 12,

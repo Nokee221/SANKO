@@ -149,11 +149,27 @@ Future<Uint8List> buildObracunPdf({
           children: [
             stat('Šank', obracun.sank),
             pw.SizedBox(width: 10),
+            stat('Kuhinja', obracun.kitchen),
+            pw.SizedBox(width: 10),
             stat('Rashod', obracun.expenses),
             pw.SizedBox(width: 10),
-            stat('Ukupno', obracun.total, highlight: true),
+            stat('Za predati', obracun.total, highlight: true),
           ],
         ),
+        if (obracun.difference case final difference?)
+          pw.Padding(
+            padding: const pw.EdgeInsets.only(top: 8),
+            child: pw.Text(
+              'Predano ${fmtMoney(obracun.handedOver!)} KM '
+              '(gotovina ${fmtMoney(obracun.cash!)}, kartice ${fmtMoney(obracun.card ?? 0)}): '
+              '${difference < 0
+                  ? 'manjak ${fmtMoney(-difference)} KM'
+                  : difference > 0
+                  ? 'višak ${fmtMoney(difference)} KM'
+                  : 'tačno'}',
+              style: pw.TextStyle(fontSize: 10, fontWeight: pw.FontWeight.bold),
+            ),
+          ),
         if (!obracun.isComplete)
           pw.Padding(
             padding: const pw.EdgeInsets.only(top: 8),
@@ -265,8 +281,7 @@ Future<Uint8List> buildObracunPdf({
               padding: const pw.EdgeInsets.symmetric(vertical: 2),
               child: pw.Text(
                 '${fmtDate(c.correctedAt)} ${fmtTime(c.correctedAt)}   '
-                '${c.itemName}: ${c.isClosing ? 'ostatak' : 'primljeno'} '
-                '${c.oldValue} → ${c.newValue}'
+                '${c.itemName}: ${correctionText(c)}'
                 '${c.note == null ? '' : '   (${c.note})'}',
                 style: const pw.TextStyle(fontSize: 9),
               ),

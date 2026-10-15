@@ -1,3 +1,5 @@
+import '../data/models.dart';
+
 const _weekdays = [
   'ponedjeljak',
   'utorak',
@@ -23,9 +25,14 @@ String fmtMoney(int amount) {
 
 String fmtKm(int amount) => '${fmtMoney(amount)} KM';
 
-/// Čita "3,5", "3.50" ili "3" kao feninge; null ako nije ispravan iznos.
+/// Čita "3,5", "3.50", "3" ili "1.167,50" kao feninge; null ako nije ispravan iznos.
 int? parseMoney(String input) {
-  final match = RegExp(r'^(\d+)(?:[.,](\d{1,2}))?$').firstMatch(input.trim());
+  var text = input.replaceAll(RegExp(r'\s'), '');
+  // Tačka za hiljade, kako se iznos i ispisuje: "1.167,50" ili "1.500".
+  if (RegExp(r'^\d{1,3}(\.\d{3})+(,\d{1,2})?$').hasMatch(text)) {
+    text = text.replaceAll('.', '');
+  }
+  final match = RegExp(r'^(\d+)(?:[.,](\d{1,2}))?$').firstMatch(text);
   if (match == null) return null;
   final cents = (match.group(2) ?? '').padRight(2, '0');
   return int.parse(match.group(1)!) * 100 + int.parse(cents);
@@ -51,4 +58,15 @@ String plural(int n, String one, String few, String many) {
   if (last == 1 && lastTwo != 11) return one;
   if (last >= 2 && last <= 4 && (lastTwo < 12 || lastTwo > 14)) return few;
   return many;
+}
+
+/// Ispravka kao tekst: "ostatak 35 → 30" ili "gotovina 100,00 → 120,00 KM".
+String correctionText(ShiftCorrection c) {
+  String value(int? v) => v == null
+      ? '–'
+      : c.field.isMoney
+      ? fmtMoney(v)
+      : '$v';
+  return '${c.field.label} ${value(c.oldValue)} → ${value(c.newValue)}'
+      '${c.field.isMoney ? ' KM' : ''}';
 }
