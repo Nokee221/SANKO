@@ -11,6 +11,7 @@ class ItemTile extends StatelessWidget {
     required this.name,
     required this.color,
     required this.onTap,
+    this.onLongPress,
     this.image,
     this.value,
     this.note,
@@ -19,6 +20,7 @@ class ItemTile extends StatelessWidget {
   final String name;
   final Color color;
   final VoidCallback onTap;
+  final VoidCallback? onLongPress;
 
   /// Slika artikla; bez nje kvadratić ima samo naziv.
   final Uint8List? image;
@@ -51,6 +53,7 @@ class ItemTile extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: onTap,
+        onLongPress: onLongPress,
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),

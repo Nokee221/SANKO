@@ -1,5 +1,6 @@
 -- BRIŠE SVE PODATKE: sve kafiće, lokale, radnike, artikle, smjene, uplate i sve naloge
--- osim superadmina. Ostaju samo superadmin, katalog slika i cijena pretplate.
+-- osim superadmina. Ostaju samo superadmin, katalog slika, cijena pretplate i podešavanje
+-- Telegram bota.
 -- Ne može se poništiti. Pokreće se u Supabase SQL Editoru.
 
 do $$
@@ -12,7 +13,8 @@ end;
 $$;
 
 -- Firme i sve što od njih zavisi: lokali, gazde, radnici, PIN-ovi, prijave telefona,
--- artikli, smjene, ulazi, rashodi, ispravke i uplate.
+-- artikli, smjene, ulazi, rashodi, predaje, ispravke, uplate, povezani Telegram razgovori
+-- i obavještenja koja čekaju slanje.
 truncate table public.organizations cascade;
 truncate table private.login_attempts;
 
@@ -26,4 +28,5 @@ select
   (select count(*) from public.organizations) as firme,
   (select count(*) from public.venues) as lokali,
   (select count(*) from public.shifts) as smjene,
+  (select count(*) from private.telegram_chats) as telegram_razgovori,
   (select count(*) from public.catalog_images) as slike_u_katalogu;

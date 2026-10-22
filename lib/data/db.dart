@@ -17,6 +17,15 @@ const _corrections = '''
     corrected_at INTEGER NOT NULL
   )''';
 
+// Stolovi lokala; na telefonu se ne koriste, ali lokalni admin u testovima ih uređuje.
+const _tables = '''
+  CREATE TABLE venue_tables (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    sort_order INTEGER NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1
+  )''';
+
 const _schema = [
   '''
   CREATE TABLE workers (
@@ -24,7 +33,8 @@ const _schema = [
     name TEXT NOT NULL,
     pin TEXT NOT NULL,
     active INTEGER NOT NULL DEFAULT 1,
-    created_at INTEGER NOT NULL
+    created_at INTEGER NOT NULL,
+    role TEXT NOT NULL DEFAULT 'konobar'
   )''',
   '''
   CREATE TABLE items (
@@ -66,6 +76,7 @@ const _schema = [
     sort_order INTEGER NOT NULL,
     opening_qty INTEGER NOT NULL,
     closing_qty INTEGER,
+    sold_qty INTEGER,
     PRIMARY KEY (shift_id, item_id)
   )''',
   // Jedan ulaz je jedna dostava: unosi se, pa zaključi. closed_at NULL znači da je još u unosu.
@@ -96,6 +107,7 @@ const _schema = [
   // Slike artikala, sačuvane na uređaju da rade i bez interneta.
   'CREATE TABLE images (id TEXT PRIMARY KEY, name TEXT NOT NULL, data BLOB NOT NULL)',
   _corrections,
+  _tables,
 ];
 
 Future<void> createSchema(Database db) async {
@@ -106,7 +118,7 @@ Future<void> createSchema(Database db) async {
 
 Future<Database> openAppDatabase() async {
   final options = OpenDatabaseOptions(
-    version: 5,
+    version: 7,
     onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
     onCreate: (db, _) => createSchema(db),
     onUpgrade: (db, from, _) async {
@@ -142,6 +154,17 @@ Future<Database> openAppDatabase() async {
           );
           await db.execute('DROP TABLE corrections_old');
         }
+      }
+      if (from < 6) {
+        // Konobar upisuje prodano; ostatak se iz njega računa.
+        await db.execute('ALTER TABLE shift_lines ADD COLUMN sold_qty INTEGER');
+      }
+      if (from < 7) {
+        // Uloga radnika i stolovi za narudžbe.
+        await db.execute(
+          "ALTER TABLE workers ADD COLUMN role TEXT NOT NULL DEFAULT 'konobar'",
+        );
+        await db.execute(_tables);
       }
     },
   );

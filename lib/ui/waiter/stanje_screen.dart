@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../data/models.dart';
 import '../../domain/obracun.dart';
 import '../common.dart';
+import '../format.dart';
 import '../theme.dart';
 import 'item_tile.dart';
 import 'number_pad.dart';
@@ -12,7 +13,7 @@ import 'predaja_screen.dart';
 import 'scope.dart';
 import 'ulaz_screen.dart';
 
-/// Brojanje na kraju smjene. Kad je uneseno sve, slijedi predaja i zaključenje.
+/// Prodano u smjeni, po artiklu. Kad je uneseno sve, slijedi predaja i zaključenje.
 /// Zatvara se sa `true` ako je smjena zaključena.
 class StanjeScreen extends StatefulWidget {
   const StanjeScreen({super.key, required this.shiftId});
@@ -30,22 +31,24 @@ class _StanjeScreenState extends State<StanjeScreen> {
     final counter = line.kind == ItemKind.counter;
     final result = await showQtyPad(
       context,
-      mode: counter ? 'Stanje brojača na aparatu' : 'Prebrojano komada',
+      mode: 'Prodano',
       itemName: line.name,
       color: ModeColors.stanje,
-      hint: counter ? 'Prethodno stanje brojača: ${line.opening}' : null,
-      initial: line.closing,
+      hint:
+          '${fmtKm(line.price)} po komadu · '
+          '${counter ? 'brojač na početku ${line.opening}' : 'na šanku ${line.total}'}',
+      initial: line.consumed,
     );
     if (result == null || !mounted) return;
     await guard(
       context,
       () => RepoScope.of(
         context,
-      ).setClosingQty(widget.shiftId, line.itemId, result.value),
+      ).setSoldQty(widget.shiftId, line.itemId, result.value),
     );
   }
 
-  /// Kad je sve prebrojano, ide se na predaju; tamo se smjena zaključuje.
+  /// Kad je sve uneseno, ide se na predaju; tamo se smjena zaključuje.
   Future<void> _toHandover() async {
     final closed = await Navigator.push<bool>(
       context,
@@ -70,7 +73,7 @@ class _StanjeScreenState extends State<StanjeScreen> {
             : lines;
         return ModeScaffold(
           title: 'STANJE',
-          subtitle: 'Brojanje na kraju smjene',
+          subtitle: 'Koliko je prodano u smjeni',
           icon: Icons.fact_check_outlined,
           color: ModeColors.stanje,
           bottom: ModeButton(
@@ -89,7 +92,8 @@ class _StanjeScreenState extends State<StanjeScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Uneseno ${lines.length - missing} od ${lines.length}',
+                            'Uneseno ${lines.length - missing} od ${lines.length}'
+                            ' · ${fmtKm(obracun.sank)}',
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.w700,
@@ -143,7 +147,7 @@ class _StanjeScreenState extends State<StanjeScreen> {
                           name: l.name,
                           image: images[l.itemId],
                           color: ModeColors.stanje,
-                          value: l.closing?.toString(),
+                          value: l.consumed?.toString(),
                           note: l.kind == ItemKind.counter ? 'brojač' : null,
                           onTap: () => _edit(l),
                         ),

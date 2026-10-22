@@ -3,12 +3,25 @@ import 'dart:typed_data';
 /// Vrsta artikla: zaliha se broji na komad, brojač je stanje s aparata koje samo raste.
 enum ItemKind { stock, counter }
 
+/// Konobar kuca narudžbe i vodi knjigu šanka; šank samo prima narudžbe.
+enum WorkerRole {
+  konobar('Konobar'),
+  sank('Šank');
+
+  const WorkerRole(this.label);
+
+  final String label;
+
+  static WorkerRole parse(Object? value) => value == 'sank' ? sank : konobar;
+}
+
 class Worker {
   const Worker({
     required this.id,
     required this.name,
     this.pin = '',
     this.active = true,
+    this.role = WorkerRole.konobar,
   });
 
   final String id;
@@ -17,12 +30,14 @@ class Worker {
   /// Poznat samo na telefonu radnika; u admin panelu je prazan.
   final String pin;
   final bool active;
+  final WorkerRole role;
 
   factory Worker.fromRow(Map<String, Object?> r) => Worker(
     id: r['id'] as String,
     name: r['name'] as String,
     pin: r['pin'] as String,
     active: r['active'] == 1,
+    role: WorkerRole.parse(r['role']),
   );
 }
 

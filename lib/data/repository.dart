@@ -10,6 +10,7 @@ import 'admin_data.dart';
 import 'demo_items.dart';
 import 'errors.dart';
 import 'models.dart';
+import 'orders.dart';
 
 export 'errors.dart';
 
@@ -53,7 +54,11 @@ class Repository extends ChangeNotifier implements AdminData {
   }
 
   @override
-  Future<void> addWorker({required String name, required String pin}) async {
+  Future<void> addWorker({
+    required String name,
+    required String pin,
+    WorkerRole role = WorkerRole.konobar,
+  }) async {
     if (name.trim().isEmpty) throw SankoException('Unesite ime radnika.');
     if (!RegExp(r'^\d{4}$').hasMatch(pin)) {
       throw SankoException('PIN mora imati tačno 4 cifre.');
@@ -66,7 +71,68 @@ class Repository extends ChangeNotifier implements AdminData {
       'name': name.trim(),
       'pin': pin,
       'created_at': _nowMs,
+      'role': role.name,
     });
+    notifyListeners();
+  }
+
+  @override
+  Future<void> setWorkerRole(String id, WorkerRole role) async {
+    await _db.update(
+      'workers',
+      {'role': role.name},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+    notifyListeners();
+  }
+
+  // --- Stolovi ---
+
+  @override
+  Future<List<VenueTable>> tables() async {
+    final rows = await _db.query(
+      'venue_tables',
+      where: 'active = 1',
+      orderBy: 'sort_order, name',
+    );
+    return [
+      for (final r in rows)
+        VenueTable(id: r['id'] as String, name: r['name'] as String),
+    ];
+  }
+
+  @override
+  Future<void> addTables(List<String> names) async {
+    final clean = [
+      for (final n in names)
+        if (n.trim().isNotEmpty) n.trim(),
+    ];
+    if (clean.isEmpty) throw SankoException('Unesite naziv stola.');
+    final last = await _db.rawQuery(
+      'SELECT COALESCE(MAX(sort_order), 0) AS n FROM venue_tables',
+    );
+    var order = last.first['n'] as int;
+    await _db.transaction((txn) async {
+      for (final name in clean) {
+        await txn.insert('venue_tables', {
+          'id': _uuid.v4(),
+          'name': name,
+          'sort_order': ++order,
+        });
+      }
+    });
+    notifyListeners();
+  }
+
+  @override
+  Future<void> removeTable(String id) async {
+    await _db.update(
+      'venue_tables',
+      {'active': 0},
+      where: 'id = ?',
+      whereArgs: [id],
+    );
     notifyListeners();
   }
 
@@ -273,11 +339,80 @@ class Repository extends ChangeNotifier implements AdminData {
     }
     await _db.update(
       'shift_lines',
-      {'closing_qty': qty},
+      {'closing_qty': qty, 'sold_qty': null},
       where: 'shift_id = ? AND item_id = ?',
       whereArgs: [shiftId, itemId],
     );
     await _changed(shiftId);
+  }
+
+  /// Upisuje koliko je konobar prodao; null briše unos. Ostatak se računa sam:
+  /// ostatak prije + ulaz − prodano, a kod brojača prethodno stanje + prodano.
+  /// Prodano se pamti, pa ga kasniji ulaz ne mijenja.
+  Future<void> setSoldQty(String shiftId, String itemId, int? sold) async {
+    await _requireOpen(shiftId);
+    int? closing;
+    if (sold != null) {
+      if (sold < 0) throw SankoException('Prodano ne može biti negativno.');
+      final line = (await _db.rawQuery(
+        '''
+        SELECT l.kind, l.opening_qty, $_receivedSql AS received
+        FROM shift_lines l WHERE l.shift_id = ? AND l.item_id = ?
+        ''',
+        [shiftId, itemId],
+      )).single;
+      final opening = line['opening_qty'] as int;
+      if (line['kind'] == ItemKind.counter.name) {
+        closing = opening + sold;
+      } else {
+        final available = opening + (line['received'] as int);
+        closing = available - sold;
+        if (closing < 0) {
+          throw SankoException(
+            'Na šanku je bilo samo $available. Ako je stigla roba, prvo je unesite u ULAZ.',
+          );
+        }
+      }
+    }
+    await _db.update(
+      'shift_lines',
+      {'closing_qty': closing, 'sold_qty': sold},
+      where: 'shift_id = ? AND item_id = ?',
+      whereArgs: [shiftId, itemId],
+    );
+    await _changed(shiftId);
+  }
+
+  /// Zaključeni ulazi artikla u smjeni; [t] je naziv ili oznaka tabele shift_lines.
+  static String _receivedOf(String t) =>
+      '(SELECT COALESCE(SUM(rl.qty), 0) '
+      'FROM receipt_lines rl JOIN receipts r ON r.id = rl.receipt_id '
+      'WHERE r.shift_id = $t.shift_id AND r.closed_at IS NOT NULL AND rl.item_id = $t.item_id)';
+
+  static final _receivedSql = _receivedOf('l');
+
+  /// Nakon promjene ulaza ili početnog stanja otvorene smjene ostatak se ponovo
+  /// računa iz upisanog prodanog. Ako bi ostatak pao ispod nule, unos se briše da ga
+  /// konobar ponovi. Vraća broj promijenjenih redova.
+  Future<int> _recomputeFromSold(String shiftId) async {
+    const t = 'shift_lines';
+    final closing =
+        "(CASE WHEN $t.kind = 'counter' THEN $t.opening_qty + $t.sold_qty "
+        'ELSE $t.opening_qty + ${_receivedOf(t)} - $t.sold_qty END)';
+    const open =
+        '$t.shift_id = ? AND $t.sold_qty IS NOT NULL AND '
+        '(SELECT s.closed_at FROM shifts s WHERE s.id = $t.shift_id) IS NULL';
+    final dropped = await _db.rawUpdate(
+      'UPDATE $t SET closing_qty = NULL, sold_qty = NULL '
+      'WHERE $open AND $closing < 0',
+      [shiftId],
+    );
+    final updated = await _db.rawUpdate(
+      'UPDATE $t SET closing_qty = $closing '
+      'WHERE $open AND closing_qty IS NOT $closing',
+      [shiftId],
+    );
+    return dropped + updated;
   }
 
   /// Zaključuje smjenu sa kuhinjom i predajom novca. Nakon ovoga se smjena više
@@ -427,6 +562,7 @@ class Repository extends ChangeNotifier implements AdminData {
 
   /// Povećava reviziju smjene, po kojoj sinhronizacija zna da ima šta poslati.
   Future<void> _changed(String shiftId) async {
+    await _recomputeFromSold(shiftId);
     await _db.rawUpdate('UPDATE shifts SET dirty = dirty + 1 WHERE id = ?', [
       shiftId,
     ]);
@@ -797,11 +933,7 @@ class Repository extends ChangeNotifier implements AdminData {
   Future<Obracun> obracunForShift(String shiftId) async {
     final rows = await _db.rawQuery(
       '''
-      SELECT l.*,
-        (SELECT COALESCE(SUM(rl.qty), 0)
-         FROM receipt_lines rl JOIN receipts r ON r.id = rl.receipt_id
-         WHERE r.shift_id = l.shift_id AND r.closed_at IS NOT NULL AND rl.item_id = l.item_id
-        ) AS received
+      SELECT l.*, $_receivedSql AS received
       FROM shift_lines l
       WHERE l.shift_id = ?
       ORDER BY l.sort_order, l.item_name
@@ -898,6 +1030,7 @@ class Repository extends ChangeNotifier implements AdminData {
     required String id,
     required String name,
     required String pin,
+    WorkerRole role = WorkerRole.konobar,
   }) async {
     await _db.update(
       'workers',
@@ -907,10 +1040,11 @@ class Repository extends ChangeNotifier implements AdminData {
     );
     await _db.rawInsert(
       '''
-      INSERT INTO workers (id, name, pin, active, created_at) VALUES (?, ?, ?, 1, ?)
-      ON CONFLICT (id) DO UPDATE SET name = excluded.name, pin = excluded.pin, active = 1
+      INSERT INTO workers (id, name, pin, active, created_at, role) VALUES (?, ?, ?, 1, ?, ?)
+      ON CONFLICT (id) DO UPDATE SET
+        name = excluded.name, pin = excluded.pin, active = 1, role = excluded.role
       ''',
-      [id, name, pin, _nowMs],
+      [id, name, pin, _nowMs, role.name],
     );
   }
 
@@ -1144,7 +1278,12 @@ class Repository extends ChangeNotifier implements AdminData {
         });
       }
     });
-    if (changed) notifyListeners();
+    // Gazda je možda promijenio početno stanje; prodano ostaje kako ga je konobar upisao.
+    if (await _recomputeFromSold(remote.id) > 0) {
+      await _changed(remote.id);
+    } else if (changed) {
+      notifyListeners();
+    }
   }
 
   // --- Slike artikala ---
@@ -1208,6 +1347,19 @@ class Repository extends ChangeNotifier implements AdminData {
     return {
       for (final r in rows) r['item_id'] as String: r['data'] as Uint8List,
     };
+  }
+
+  /// Slike iz kataloga koje telefon već ima, po oznaci slike.
+  Future<Map<String, Uint8List>> imagesByIds(Iterable<String> ids) async {
+    final list = ids.toSet().toList();
+    if (list.isEmpty) return {};
+    final rows = await _db.query(
+      'images',
+      columns: ['id', 'data'],
+      where: 'id IN (${List.filled(list.length, '?').join(', ')})',
+      whereArgs: list,
+    );
+    return {for (final r in rows) r['id'] as String: r['data'] as Uint8List};
   }
 
   /// Smjene radnika koje imaju izmjene neposlane na server, sa revizijom u trenutku čitanja.

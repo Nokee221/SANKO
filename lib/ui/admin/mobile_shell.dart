@@ -10,6 +10,7 @@ import 'narudzba_page.dart';
 import 'obavjestenja_page.dart';
 import 'obracun_page.dart';
 import 'prosjek_page.dart';
+import 'tables_page.dart';
 import 'widgets.dart';
 import 'workers_page.dart';
 
@@ -154,8 +155,14 @@ class _MorePage extends StatelessWidget {
                   _Tile(
                     icon: Icons.people_outline,
                     title: 'Radnici',
-                    subtitle: 'Konobari i njihovi PIN-ovi',
+                    subtitle: 'Konobari, šank i njihovi PIN-ovi',
                     onTap: () => _open(context, const WorkersPage()),
+                  ),
+                  _Tile(
+                    icon: Icons.table_restaurant_outlined,
+                    title: 'Stolovi',
+                    subtitle: 'Za narudžbe sa stola',
+                    onTap: () => _open(context, const TablesPage()),
                   ),
                   _Tile(
                     icon: Icons.notifications_outlined,

@@ -79,9 +79,9 @@ class _DarkPanel extends StatelessWidget {
   }
 }
 
-/// Zaglavlje sa lokalom i imenom prijavljenog radnika; ispod idu podaci o smjeni.
-class _Header extends StatelessWidget {
-  const _Header({required this.name, this.children = const []});
+/// Zaglavlje sa lokalom i imenom prijavljenog radnika; ispod idu npr. podaci o smjeni.
+class WaiterHeader extends StatelessWidget {
+  const WaiterHeader({super.key, required this.name, this.children = const []});
 
   final String name;
   final List<Widget> children;
@@ -115,7 +115,7 @@ class _Header extends StatelessWidget {
                 tooltip: 'Odjava',
                 icon: const Icon(Icons.logout),
                 color: Colors.white70,
-                onPressed: () => Navigator.pop(context),
+                onPressed: () => Navigator.popUntil(context, (r) => r.isFirst),
               ),
             ],
           ),
@@ -191,7 +191,7 @@ class _StartShift extends StatelessWidget {
     return Scaffold(
       body: Column(
         children: [
-          _Header(
+          WaiterHeader(
             name: worker.name,
             children: const [
               SizedBox(height: 10),
@@ -337,7 +337,7 @@ class _Home extends StatelessWidget {
     return Scaffold(
       body: Column(
         children: [
-          _Header(
+          WaiterHeader(
             name: shift.workerName,
             children: [
               const SizedBox(height: 12),
@@ -394,7 +394,7 @@ class _Home extends StatelessWidget {
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
                     child: Column(
                       children: [
-                        _ModeTile(
+                        ModeTile(
                           title: 'ULAZ',
                           subtitle: 'Roba koja je stigla',
                           value:
@@ -413,7 +413,7 @@ class _Home extends StatelessWidget {
                           },
                         ),
                         const SizedBox(height: 12),
-                        _ModeTile(
+                        ModeTile(
                           title: 'RASHOD',
                           subtitle: 'Novac potrošen iz kase',
                           value: fmtMoney(data.obracun.expenses),
@@ -428,9 +428,9 @@ class _Home extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 12),
-                        _ModeTile(
+                        ModeTile(
                           title: 'STANJE',
-                          subtitle: 'Brojanje na kraju smjene',
+                          subtitle: 'Koliko je prodano u smjeni',
                           value: '$entered/${lines.length}',
                           valueLabel: 'uneseno',
                           icon: Icons.fact_check_outlined,
@@ -460,12 +460,14 @@ class _Home extends StatelessWidget {
 }
 
 /// Jedan od tri velika ulaza na početnoj: naziv lijevo, trenutno stanje desno.
-class _ModeTile extends StatelessWidget {
-  const _ModeTile({
+/// Velika pločica u boji jednog dijela posla, sa brojem desno.
+class ModeTile extends StatelessWidget {
+  const ModeTile({
+    super.key,
     required this.title,
     required this.subtitle,
-    required this.value,
-    required this.valueLabel,
+    this.value = '',
+    this.valueLabel = '',
     required this.icon,
     required this.color,
     required this.onTap,
@@ -731,7 +733,8 @@ class _Summary extends StatelessWidget {
                     height: 58,
                     width: double.infinity,
                     child: FilledButton(
-                      onPressed: () => Navigator.pop(context),
+                      onPressed: () =>
+                          Navigator.popUntil(context, (r) => r.isFirst),
                       child: const Text('Odjava'),
                     ),
                   ),

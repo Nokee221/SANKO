@@ -7,6 +7,7 @@ abstract final class ModeColors {
   static const ulaz = Color(0xFF1E7B4F);
   static const rashod = Color(0xFFC2570C);
   static const stanje = Color(0xFF1D5FA8);
+  static const narudzba = Color(0xFF0E7C7B);
 }
 
 /// Učitava podatke iz izvora [S] i ponovo ih učitava nakon svake njegove promjene.

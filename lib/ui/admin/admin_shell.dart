@@ -7,10 +7,11 @@ import 'narudzba_page.dart';
 import 'obavjestenja_page.dart';
 import 'obracun_page.dart';
 import 'prosjek_page.dart';
+import 'tables_page.dart';
 import 'widgets.dart';
 import 'workers_page.dart';
 
-/// Admin panel jednog lokala: obračun, izvještaji, narudžba, artikli, radnici i obavještenja.
+/// Admin panel jednog lokala: obračun, izvještaji, narudžba, artikli, radnici, stolovi i obavještenja.
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key, this.header, this.footer, this.venueName = ''});
 
@@ -37,6 +38,7 @@ class _AdminShellState extends State<AdminShell> {
     (Icons.shopping_cart_outlined, 'Narudžba'),
     (Icons.local_bar_outlined, 'Artikli'),
     (Icons.people_outline, 'Radnici'),
+    (Icons.table_restaurant_outlined, 'Stolovi'),
     (Icons.notifications_outlined, 'Obavještenja'),
   ];
 
@@ -95,6 +97,7 @@ class _AdminShellState extends State<AdminShell> {
               3 => NarudzbaPage(venueName: widget.venueName),
               4 => const ItemsPage(),
               5 => const WorkersPage(),
+              6 => const TablesPage(),
               _ => const ObavjestenjaPage(),
             },
           ),

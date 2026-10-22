@@ -155,6 +155,9 @@ void main() {
     expect(find.text('Pogrešan kod lokala ili PIN.'), findsOneWidget);
 
     await enterPin('1111');
+    // Konobar bira između narudžbe i obračuna.
+    expect(find.text('NARUDŽBA'), findsOneWidget);
+    await tapText('OBRAČUN');
     expect(find.text('Započni smjenu'), findsOneWidget);
     await tapText('Započni smjenu');
     expect(find.text('ULAZ'), findsOneWidget);
@@ -203,21 +206,30 @@ void main() {
     // STANJE
     await tapText('STANJE');
     await tapText('KAFA');
-    expect(find.text('Prethodno stanje brojača: 148687'), findsOneWidget);
-    await tester.tap(find.text('5').last);
-    await tester.pump();
+    expect(
+      find.text('2,50 KM po komadu · brojač na početku 148687'),
+      findsOneWidget,
+    );
+    for (final d in '404'.split('')) {
+      await tester.tap(find.text(d).last);
+      await tester.pump();
+    }
     await tapText('Potvrdi');
-    expect(find.textContaining('Brojač ne može biti manji'), findsOneWidget);
+    // Ne može se prodati više nego što je bilo na šanku.
+    await enterQty('KAPUCINO', '999');
+    expect(find.textContaining('Na šanku je bilo samo'), findsOneWidget);
     await tapText('U redu');
-    await enterQty('KAFA', '149091');
-    await enterQty('KAPUCINO', '42');
-    await enterQty('ČAJ', '207');
-    expect(find.text('Uneseno 3 od 33'), findsOneWidget);
+    await enterQty('KAPUCINO', '30');
+    await enterQty('ČAJ', '7');
+    expect(
+      find.text('Uneseno 3 od 33 · ${fmtKm(404 * 250 + 30 * 350 + 7 * 300)}'),
+      findsOneWidget,
+    );
     expect(find.text('Još 30 za unijeti'), findsOneWidget);
     await settleImages();
     await _shot('07_stanje');
 
-    // Ostatak brojanja ide direktno u bazu telefona: sve ostaje kako je bilo, osim kole i đusa.
+    // Ostatak unosa ide direktno u bazu telefona: prodane su samo kola i đus.
     final shift = (await tester.runAsync(phone.openShift))!;
     await tester.runAsync(() async {
       final o = await phone.obracunForShift(shift.id);
@@ -227,7 +239,7 @@ void main() {
           'ĐUS' => 9,
           _ => 0,
         };
-        await phone.setClosingQty(shift.id, l.itemId, l.total - sold);
+        await phone.setSoldQty(shift.id, l.itemId, sold);
       }
     });
     await tester.pumpAndSettle();
@@ -288,6 +300,7 @@ void main() {
       await other.startShift('nova');
     });
     await enterPin('1111');
+    await tapText('OBRAČUN');
     await tapText('Započni smjenu');
     expect(
       find.textContaining('Smjenu još nije zaključio/la Bakir'),

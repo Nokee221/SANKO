@@ -55,4 +55,4 @@ app.*.map.json
 /supabase/.temp/
 
 # Promo video i radni fajlovi alata /brag; nisu dio aplikacije.
-/brag-output/
+/brag-output*/

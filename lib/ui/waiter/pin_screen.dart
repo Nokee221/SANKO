@@ -6,7 +6,7 @@ import '../common.dart';
 import '../theme.dart';
 import 'number_pad.dart';
 import 'scope.dart';
-import 'waiter_gate.dart';
+import 'worker_home.dart';
 
 /// Prijava konobara PIN-om od 4 cifre, u lokal čiji je kod unesen na ovom telefonu.
 class PinScreen extends StatefulWidget {
@@ -39,7 +39,7 @@ class _PinScreenState extends State<PinScreen> {
       });
       Navigator.of(
         context,
-      ).push(MaterialPageRoute(builder: (_) => WaiterGate(worker: worker)));
+      ).push(MaterialPageRoute(builder: (_) => WorkerHome(worker: worker)));
     } on SankoException catch (e) {
       if (!mounted) return;
       setState(() {

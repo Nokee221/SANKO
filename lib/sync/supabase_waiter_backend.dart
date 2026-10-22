@@ -4,6 +4,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/models.dart';
+import '../data/orders.dart';
 import '../data/repository.dart';
 import 'remote_shift.dart';
 import 'supabase_errors.dart';
@@ -49,6 +50,7 @@ class SupabaseWaiterBackend implements WaiterBackend {
           workerId: r['worker']['id'] as String,
           workerName: r['worker']['name'] as String,
           venueName: r['venue']['name'] as String,
+          role: WorkerRole.parse(r['worker']['role']),
         );
       });
 
@@ -97,4 +99,51 @@ class SupabaseWaiterBackend implements WaiterBackend {
       params: {'p_token': await _repo.meta(_tokenKey), 'p_shift': payload},
     ),
   );
+
+  @override
+  Future<Menu> fetchMenu() => supabaseCall(() async {
+    final menu = await _client.rpc(
+      'waiter_menu',
+      params: {'p_token': await _repo.meta(_tokenKey)},
+    );
+    return Menu.fromJson(menu as Map<String, dynamic>);
+  });
+
+  @override
+  Future<Order> placeOrder(NewOrder order) => supabaseCall(() async {
+    final placed = await _client.rpc(
+      'place_order',
+      params: {
+        'p_token': await _repo.meta(_tokenKey),
+        'p_order': order.toPayload(),
+      },
+    );
+    return Order.fromJson(placed as Map<String, dynamic>);
+  });
+
+  @override
+  Future<List<Order>> fetchOrders({required bool mine}) => supabaseCall(
+    () async {
+      final rows = await _client.rpc(
+        'waiter_orders',
+        params: {'p_token': await _repo.meta(_tokenKey), 'p_mine': mine},
+      );
+      return [
+        for (final r in rows as List) Order.fromJson(r as Map<String, dynamic>),
+      ];
+    },
+  );
+
+  @override
+  Future<void> setOrderDone(String orderId, {required bool done}) =>
+      supabaseCall(
+        () async => _client.rpc(
+          'set_order_done',
+          params: {
+            'p_token': await _repo.meta(_tokenKey),
+            'p_order_id': orderId,
+            'p_done': done,
+          },
+        ),
+      );
 }

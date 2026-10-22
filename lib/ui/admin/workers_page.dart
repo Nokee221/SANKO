@@ -8,7 +8,7 @@ import 'layout.dart';
 import 'scope.dart';
 import 'widgets.dart';
 
-/// Dodavanje i brisanje radnika.
+/// Dodavanje i brisanje radnika i njihove uloge: konobar ili šank.
 class WorkersPage extends StatelessWidget {
   const WorkersPage({super.key});
 
@@ -102,6 +102,7 @@ class WorkersPage extends StatelessWidget {
                                         ),
                                       ),
                                     ),
+                                    _RoleButton(worker: w),
                                     IconButton(
                                       tooltip: 'Obriši',
                                       icon: const Icon(
@@ -130,6 +131,57 @@ class WorkersPage extends StatelessWidget {
   }
 }
 
+/// Uloga radnika; klik je mijenja.
+class _RoleButton extends StatelessWidget {
+  const _RoleButton({required this.worker});
+
+  final Worker worker;
+
+  Future<void> _change(BuildContext context, WorkerRole role) async {
+    if (role == worker.role) return;
+    final ok = await confirm(
+      context,
+      title: '${worker.name}: ${role.label}?',
+      action: 'Promijeni',
+      content: const Text(
+        'Radnik se odjavljuje sa telefona i pri sljedećoj prijavi vidi ekran nove uloge.',
+      ),
+    );
+    if (ok && context.mounted) {
+      await guard(
+        context,
+        () => AdminScope.of(context).setWorkerRole(worker.id, role),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PopupMenuButton<WorkerRole>(
+      tooltip: 'Uloga',
+      onSelected: (role) => _change(context, role),
+      itemBuilder: (_) => [
+        for (final role in WorkerRole.values)
+          CheckedPopupMenuItem(
+            value: role,
+            checked: role == worker.role,
+            child: Text(role.label),
+          ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Tag(worker.role.label),
+            const Icon(Icons.arrow_drop_down, color: SankoColors.muted),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _WorkerDialog extends StatefulWidget {
   const _WorkerDialog();
 
@@ -140,6 +192,7 @@ class _WorkerDialog extends StatefulWidget {
 class _WorkerDialogState extends State<_WorkerDialog> {
   final _name = TextEditingController();
   final _pin = TextEditingController();
+  var _role = WorkerRole.konobar;
 
   @override
   void dispose() {
@@ -151,7 +204,9 @@ class _WorkerDialogState extends State<_WorkerDialog> {
   Future<void> _save() async {
     final saved = await guard(
       context,
-      () => AdminScope.of(context).addWorker(name: _name.text, pin: _pin.text),
+      () => AdminScope.of(
+        context,
+      ).addWorker(name: _name.text, pin: _pin.text, role: _role),
     );
     if (saved && mounted) Navigator.pop(context);
   }
@@ -184,6 +239,33 @@ class _WorkerDialogState extends State<_WorkerDialog> {
                 helperText: 'PIN se kasnije ne može vidjeti; zapišite ga.',
               ),
               onSubmitted: (_) => _save(),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<WorkerRole>(
+                segments: const [
+                  ButtonSegment(
+                    value: WorkerRole.konobar,
+                    label: Text('Konobar'),
+                    icon: Icon(Icons.room_service_outlined),
+                  ),
+                  ButtonSegment(
+                    value: WorkerRole.sank,
+                    label: Text('Šank'),
+                    icon: Icon(Icons.local_bar_outlined),
+                  ),
+                ],
+                selected: {_role},
+                onSelectionChanged: (v) => setState(() => _role = v.single),
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _role == WorkerRole.konobar
+                  ? 'Kuca narudžbe za stolom i vodi knjigu šanka.'
+                  : 'Na šanku prima narudžbe i označava ih kao gotove.',
+              style: const TextStyle(color: SankoColors.muted, fontSize: 13),
             ),
           ],
         ),

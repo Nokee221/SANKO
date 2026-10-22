@@ -7,6 +7,7 @@ import '../data/admin_data.dart';
 import '../data/demo_items.dart';
 import '../data/errors.dart';
 import '../data/models.dart';
+import '../data/orders.dart';
 import '../domain/obracun.dart';
 import '../domain/report.dart';
 import '../domain/stats.dart';
@@ -109,16 +110,87 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
         .order('name', ascending: true);
     return [
       for (final r in rows)
-        Worker(id: r['id'] as String, name: r['name'] as String),
+        Worker(
+          id: r['id'] as String,
+          name: r['name'] as String,
+          role: WorkerRole.parse(r['role']),
+        ),
     ];
   });
 
   @override
-  Future<void> addWorker({required String name, required String pin}) => _write(
+  Future<void> addWorker({
+    required String name,
+    required String pin,
+    WorkerRole role = WorkerRole.konobar,
+  }) => _write(
     () => _client.rpc(
       'admin_save_worker',
-      params: {'p_venue_id': venueId, 'p_name': name, 'p_pin': pin},
+      params: {
+        'p_venue_id': venueId,
+        'p_name': name,
+        'p_pin': pin,
+        'p_role': role.name,
+      },
     ),
+  );
+
+  @override
+  Future<void> setWorkerRole(String id, WorkerRole role) => _write(() async {
+    final worker = await _client
+        .from('workers')
+        .select('name')
+        .eq('id', id)
+        .single();
+    await _client.rpc(
+      'admin_save_worker',
+      params: {
+        'p_venue_id': venueId,
+        'p_name': worker['name'],
+        'p_worker_id': id,
+        'p_role': role.name,
+      },
+    );
+  });
+
+  @override
+  Future<List<VenueTable>> tables() => _call(() async {
+    final rows = await _client
+        .from('venue_tables')
+        .select('id, name')
+        .eq('venue_id', venueId)
+        .eq('active', true)
+        .order('sort_order')
+        .order('name');
+    return [
+      for (final r in rows)
+        VenueTable(id: r['id'] as String, name: r['name'] as String),
+    ];
+  });
+
+  @override
+  Future<void> addTables(List<String> names) => _write(() async {
+    final clean = [
+      for (final n in names)
+        if (n.trim().isNotEmpty) n.trim(),
+    ];
+    if (clean.isEmpty) throw SankoException('Unesite naziv stola.');
+    final last = await _client
+        .from('venue_tables')
+        .select('sort_order')
+        .eq('venue_id', venueId)
+        .order('sort_order', ascending: false)
+        .limit(1);
+    var order = last.isEmpty ? 0 : last.first['sort_order'] as int;
+    await _client.from('venue_tables').insert([
+      for (final name in clean)
+        {'venue_id': venueId, 'name': name, 'sort_order': ++order},
+    ]);
+  });
+
+  @override
+  Future<void> removeTable(String id) => _write(
+    () => _client.from('venue_tables').update({'active': false}).eq('id', id),
   );
 
   @override

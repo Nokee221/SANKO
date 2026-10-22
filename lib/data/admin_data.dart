@@ -4,12 +4,27 @@ import '../domain/obracun.dart';
 import '../domain/report.dart';
 import '../domain/stats.dart';
 import 'models.dart';
+import 'orders.dart';
 
 /// Podaci jednog lokala kako ih vidi admin panel. Javlja promjene kao [Listenable].
 abstract interface class AdminData implements Listenable {
   Future<List<Worker>> workers();
-  Future<void> addWorker({required String name, required String pin});
+  Future<void> addWorker({
+    required String name,
+    required String pin,
+    WorkerRole role,
+  });
   Future<void> removeWorker(String id);
+
+  /// Mijenja ulogu radnika; radnik se odjavljuje sa telefona.
+  Future<void> setWorkerRole(String id, WorkerRole role);
+
+  /// Stolovi lokala, za narudžbe.
+  Future<List<VenueTable>> tables();
+
+  /// Dodaje stolove redom iza postojećih.
+  Future<void> addTables(List<String> names);
+  Future<void> removeTable(String id);
 
   Future<List<Item>> items();
 

@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 import '../data/models.dart';
+import '../data/orders.dart';
 import '../data/repository.dart';
 import 'waiter_backend.dart';
 
@@ -94,6 +95,7 @@ class WaiterSync extends ChangeNotifier {
       id: result.workerId!,
       name: result.workerName!,
       pin: pin,
+      role: result.role,
     );
     _sessionWorkerId = result.workerId;
     _venueName = result.venueName;
@@ -102,7 +104,12 @@ class WaiterSync extends ChangeNotifier {
     notifyListeners();
     unawaited(pushNow());
     _refreshing = refresh(images: true);
-    return Worker(id: result.workerId!, name: result.workerName!, pin: pin);
+    return Worker(
+      id: result.workerId!,
+      name: result.workerName!,
+      pin: pin,
+      role: result.role,
+    );
   }
 
   Future<void> _refreshing = Future.value();
@@ -126,6 +133,61 @@ class WaiterSync extends ChangeNotifier {
       throw SankoException('Za početak smjene je potreban internet.');
     }
   }
+
+  /// Narudžbe idu odmah na šank, pa traže internet. Ako je telefon na serveru
+  /// prijavljen kao drugi radnik (prijava bez mreže), prvo se ponovo prijavljuje.
+  Future<T> _online<T>(
+    Worker worker,
+    String offlineMessage,
+    Future<T> Function() call,
+  ) async {
+    try {
+      if (_sessionWorkerId != worker.id) await login(worker.pin);
+      if (_sessionWorkerId != worker.id) throw const OfflineException();
+      return await call();
+    } on OfflineException {
+      throw SankoException(offlineMessage);
+    }
+  }
+
+  /// Artikli i stolovi za kucanje, sa slikama artikala po oznaci slike.
+  Future<(Menu, Map<String, Uint8List>)> menu(Worker worker) =>
+      _online(worker, 'Nema interneta. Narudžbe traže internet.', () async {
+        final menu = await _backend.fetchMenu();
+        final ids = {
+          for (final i in menu.items)
+            if (i.imageId != null) i.imageId!,
+        };
+        var images = await _repo.imagesByIds(ids);
+        final missing = ids.difference(images.keys.toSet()).toList();
+        if (missing.isNotEmpty) {
+          await _repo.saveImages(await _backend.fetchImages(missing));
+          images = await _repo.imagesByIds(ids);
+        }
+        return (menu, images);
+      });
+
+  Future<Order> placeOrder(Worker worker, NewOrder order) => _online(
+    worker,
+    'Nema interneta. Narudžba nije poslana; pokušajte ponovo.',
+    () => _backend.placeOrder(order),
+  );
+
+  Future<List<Order>> orders(Worker worker, {required bool mine}) => _online(
+    worker,
+    'Nema interneta. Narudžbe se ne mogu učitati.',
+    () => _backend.fetchOrders(mine: mine),
+  );
+
+  Future<void> setOrderDone(
+    Worker worker,
+    String orderId, {
+    required bool done,
+  }) => _online(
+    worker,
+    'Nema interneta. Narudžba nije označena; pokušajte ponovo.',
+    () => _backend.setOrderDone(orderId, done: done),
+  );
 
   /// Preuzima slike artikala koje telefon još nema. Sa [refresh] ponovo preuzima
   /// sve, jer prodavac može zamijeniti sliku pod istim nazivom (npr. probnu pravom).

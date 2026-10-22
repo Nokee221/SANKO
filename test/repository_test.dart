@@ -52,6 +52,37 @@ void main() {
   ObracunLine line(Obracun o, String name) =>
       o.lines.firstWhere((l) => l.name == name);
 
+  test('konobar upisuje prodano; iznos je prodano puta cijena', () async {
+    final ids = await itemIds();
+    final amra = (await repo.workerByPin('1111'))!;
+    final shift = await repo.startShift(amra.id);
+
+    await repo.setSoldQty(shift.id, ids['KOLA']!, 5);
+    await repo.setSoldQty(shift.id, ids['KAFA']!, 40);
+    var o = await repo.obracunForShift(shift.id);
+    expect(line(o, 'KOLA').consumed, 5);
+    expect(line(o, 'KOLA').closing, 72);
+    expect(line(o, 'KOLA').amount, 5 * 350);
+    expect(line(o, 'KAFA').closing, 148727, reason: 'brojač ide naprijed');
+    expect(line(o, 'KAFA').amount, 40 * 250);
+
+    // Roba stigla nakon unosa: prodano ostaje 5, raste samo ostatak.
+    await repo.setDraftReceiptQty(shift.id, ids['KOLA']!, 24);
+    await repo.closeDraftReceipt(shift.id);
+    o = await repo.obracunForShift(shift.id);
+    expect(line(o, 'KOLA').consumed, 5);
+    expect(line(o, 'KOLA').closing, 96);
+
+    // Ne može se prodati više nego što je bilo na šanku.
+    await expectLater(
+      repo.setSoldQty(shift.id, ids['ĐUS']!, 57),
+      throwsA(isA<SankoException>()),
+    );
+    await repo.setSoldQty(shift.id, ids['ĐUS']!, 56);
+    o = await repo.obracunForShift(shift.id);
+    expect(o.sank, 5 * 350 + 40 * 250 + 56 * 350);
+  });
+
   test('obračun smjene odgovara primjeru iz knjige šanka', () async {
     final ids = await itemIds();
     final amra = (await repo.workerByPin('1111'))!;
