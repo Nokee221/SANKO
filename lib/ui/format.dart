@@ -25,6 +25,17 @@ String fmtMoney(int amount) {
 
 String fmtKm(int amount) => '${fmtMoney(amount)} KM';
 
+/// Grami sa tačkom za hiljade: 145.000 g.
+String fmtGrams(int grams) {
+  final digits = grams.abs().toString();
+  final out = StringBuffer(grams < 0 ? '-' : '');
+  for (var i = 0; i < digits.length; i++) {
+    if (i > 0 && (digits.length - i) % 3 == 0) out.write('.');
+    out.write(digits[i]);
+  }
+  return '$out g';
+}
+
 /// Čita "3,5", "3.50", "3" ili "1.167,50" kao feninge; null ako nije ispravan iznos.
 int? parseMoney(String input) {
   var text = input.replaceAll(RegExp(r'\s'), '');

@@ -94,9 +94,8 @@ Future<Repository> _seed(Database db) async {
   Future<void> count(String shiftId, Map<String, int> sold) async {
     final o = await repo.obracunForShift(shiftId);
     for (final l in o.lines) {
-      final closing = l.kind == ItemKind.counter
-          ? l.opening + (sold[l.name] ?? 0)
-          : l.total - (sold[l.name] ?? 0);
+      // Kafa se vodi u gramima: svaka porcija skida svoju gramažu.
+      final closing = l.total - (sold[l.name] ?? 0) * l.portion;
       await repo.setClosingQty(shiftId, l.itemId, closing);
     }
   }
@@ -249,7 +248,7 @@ void main() {
     await _shot('10_artikal_dijalog');
     await tap(find.text('Odustani'));
 
-    // Više: Prosjek, Radnici, Obavještenja.
+    // Više: Prosjek, Radnici, Stolovi.
     await tap(find.text('Više'));
     await _shot('11_vise');
     await tap(find.text('Prosjek'));
@@ -264,8 +263,7 @@ void main() {
     await _shot('14_radnik_dijalog');
     await tap(find.text('Odustani'));
     await tap(find.byType(BackButton));
-    await tap(find.text('Obavještenja'));
-    await _shot('15_obavjestenja');
+    expect(find.text('Obavještenja'), findsNothing, reason: 'za sada skriveno');
   });
 
   testWidgets('telefon pita ko ga koristi, a konobar može preći na gazdu', (

@@ -16,7 +16,7 @@ void main() {
   late String kafa;
   late Shift second;
 
-  /// Dvije zaključene smjene danas: kola 77 → 88 → 80, kafa 1000 → 1100 → 1200.
+  /// Dvije zaključene smjene danas: kola 77 → 88 → 80, kafa 1000 g → 900 g → 800 g.
   Future<void> setUp(WidgetTester tester) async {
     await tester.runAsync(() async {
       db = await openTestDb(isolate: false);
@@ -47,9 +47,9 @@ void main() {
         return repo.shiftById(s.id);
       }
 
-      await shift(1100, 88);
+      await shift(900, 88);
       now = now.add(const Duration(hours: 6));
-      second = await shift(1200, 80);
+      second = await shift(800, 80);
     });
     addTearDown(() => db.close());
     tester.view.devicePixelRatio = 1;
@@ -108,7 +108,7 @@ void main() {
     },
   );
 
-  testWidgets('brojač se ne može ispraviti ispod prethodnog stanja', (
+  testWidgets('kafa se ispravlja u gramima i ide u sljedeću smjenu', (
     tester,
   ) async {
     await setUp(tester);
@@ -117,18 +117,11 @@ void main() {
     await tester.tap(find.text('Ispravi smjenu'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(ValueKey('ostatak-$kafa')), '900');
+    await tester.enterText(find.byKey(ValueKey('ostatak-$kafa')), '950');
     await tester.tap(find.text('Sačuvaj ispravku'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('ne može biti manji'), findsOneWidget);
-    await tester.tap(find.text('U redu'));
-    await tester.pumpAndSettle();
-    expect(
-      find.text('Sačuvaj ispravku'),
-      findsOneWidget,
-      reason: 'prozor ostaje otvoren',
-    );
-    expect(await opening(tester, second, kafa), 1100);
+    expect(find.text('Sačuvaj ispravku'), findsNothing);
+    expect(await opening(tester, second, kafa), 950);
   });
 }

@@ -64,7 +64,7 @@ class _RashodScreenState extends State<RashodScreen> {
                   return const Center(
                     child: Text(
                       'Još nema rashoda u ovoj smjeni',
-                      style: TextStyle(color: SankoColors.muted, fontSize: 16),
+                      style: TextStyle(color: WaiterColors.muted, fontSize: 16),
                     ),
                   );
                 }
@@ -98,13 +98,13 @@ class _RashodScreenState extends State<RashodScreen> {
                                       fontSize: 17,
                                       fontWeight: FontWeight.w700,
                                       fontFeatures: tabularFigures,
-                                      color: SankoColors.ink,
+                                      color: WaiterColors.text,
                                     ),
                                   ),
                                   IconButton(
                                     tooltip: 'Obriši',
                                     icon: const Icon(Icons.close, size: 20),
-                                    color: SankoColors.muted,
+                                    color: WaiterColors.muted,
                                     onPressed: () => guard(
                                       context,
                                       () => RepoScope.of(
@@ -129,14 +129,14 @@ class _RashodScreenState extends State<RashodScreen> {
                             child: Text(
                               'Ukupno rashod',
                               style: TextStyle(
-                                color: SankoColors.muted,
+                                color: WaiterColors.muted,
                                 fontSize: 15,
                               ),
                             ),
                           ),
                           Text(
                             fmtKm(total),
-                            style: const TextStyle(
+                            style: TextStyle(
                               fontSize: 28,
                               fontWeight: FontWeight.w800,
                               letterSpacing: -0.5,
@@ -154,8 +154,8 @@ class _RashodScreenState extends State<RashodScreen> {
           ),
           Container(
             decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(top: BorderSide(color: SankoColors.line)),
+              color: WaiterColors.surface,
+              border: Border(top: BorderSide(color: WaiterColors.line)),
             ),
             child: SafeArea(
               top: false,
@@ -169,7 +169,7 @@ class _RashodScreenState extends State<RashodScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Opis',
                         hintText: 'npr. Konzum, mlijeko',
-                        fillColor: SankoColors.paper,
+                        fillColor: WaiterColors.raised,
                       ),
                     ),
                     const SizedBox(height: 10),
@@ -184,7 +184,7 @@ class _RashodScreenState extends State<RashodScreen> {
                             decoration: const InputDecoration(
                               labelText: 'Iznos',
                               suffixText: 'KM',
-                              fillColor: SankoColors.paper,
+                              fillColor: WaiterColors.raised,
                             ),
                             onSubmitted: (_) => _add(),
                           ),
@@ -195,6 +195,7 @@ class _RashodScreenState extends State<RashodScreen> {
                           child: FilledButton.icon(
                             style: FilledButton.styleFrom(
                               backgroundColor: ModeColors.rashod,
+                              foregroundColor: Colors.white,
                             ),
                             onPressed: _add,
                             icon: const Icon(Icons.add),

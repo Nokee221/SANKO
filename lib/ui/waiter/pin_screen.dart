@@ -167,21 +167,33 @@ class _PinScreenState extends State<PinScreen> {
   }
 }
 
-/// Naziv aplikacije na tamnoj podlozi.
+/// Znak i naziv aplikacije na tamnoj podlozi.
 class Wordmark extends StatelessWidget {
   const Wordmark({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const Text(
-      'Šanko',
-      style: TextStyle(
-        color: Colors.white,
-        fontSize: 44,
-        height: 1.1,
-        fontWeight: FontWeight.w800,
-        letterSpacing: -1.5,
-      ),
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Image.asset(
+          'assets/brand/logo.png',
+          width: 84,
+          height: 84,
+          filterQuality: FilterQuality.medium,
+        ),
+        const SizedBox(height: 14),
+        const Text(
+          'Šanko',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 44,
+            height: 1.1,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -1.5,
+          ),
+        ),
+      ],
     );
   }
 }

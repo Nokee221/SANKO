@@ -27,7 +27,8 @@ void main() {
       name: 'KAFA',
       kind: ItemKind.counter,
       price: 250,
-      initialQty: 148687,
+      initialQty: 145000,
+      portion: 20,
     );
     await repo.addItem(
       name: 'KOLA',
@@ -63,7 +64,7 @@ void main() {
     expect(line(o, 'KOLA').consumed, 5);
     expect(line(o, 'KOLA').closing, 72);
     expect(line(o, 'KOLA').amount, 5 * 350);
-    expect(line(o, 'KAFA').closing, 148727, reason: 'brojač ide naprijed');
+    expect(line(o, 'KAFA').closing, 144200, reason: '40 kafa × 20 g');
     expect(line(o, 'KAFA').amount, 40 * 250);
 
     // Roba stigla nakon unosa: prodano ostaje 5, raste samo ostatak.
@@ -98,7 +99,7 @@ void main() {
     );
     await repo.addExpense(shift.id, description: 'Kafa na Bakira', amount: 250);
 
-    await repo.setClosingQty(shift.id, ids['KAFA']!, 149091);
+    await repo.setClosingQty(shift.id, ids['KAFA']!, 136920);
     await repo.setClosingQty(shift.id, ids['KOLA']!, 88);
     await repo.setClosingQty(shift.id, ids['ĐUS']!, 35);
     await repo.closeShift(shift.id);
@@ -124,7 +125,7 @@ void main() {
       final bakir = (await repo.workerByPin('2222'))!;
 
       final first = await repo.startShift(amra.id);
-      await repo.setClosingQty(first.id, ids['KAFA']!, 148887);
+      await repo.setClosingQty(first.id, ids['KAFA']!, 141000);
       await repo.setClosingQty(first.id, ids['KOLA']!, 70);
       await repo.setClosingQty(first.id, ids['ĐUS']!, 50);
       await repo.closeShift(first.id);
@@ -134,18 +135,18 @@ void main() {
       expect(second.seq, 2);
       await repo.setDraftReceiptQty(second.id, ids['KOLA']!, 24);
       await repo.closeDraftReceipt(second.id);
-      await repo.setClosingQty(second.id, ids['KAFA']!, 149091);
+      await repo.setClosingQty(second.id, ids['KAFA']!, 136920);
       await repo.setClosingQty(second.id, ids['KOLA']!, 82);
       await repo.setClosingQty(second.id, ids['ĐUS']!, 47);
       await repo.closeShift(second.id);
 
       final o2 = await repo.obracunForShift(second.id);
       expect(line(o2, 'KOLA').opening, 70);
-      expect(line(o2, 'KAFA').opening, 148887);
+      expect(line(o2, 'KAFA').opening, 141000);
 
       final day = await repo.obracunForDay(DateTime(2025, 7, 30));
-      expect(line(day, 'KAFA').opening, 148687);
-      expect(line(day, 'KAFA').closing, 149091);
+      expect(line(day, 'KAFA').opening, 145000);
+      expect(line(day, 'KAFA').closing, 136920);
       expect(line(day, 'KAFA').consumed, 404);
       expect(line(day, 'KOLA').received, 24);
       expect(line(day, 'KOLA').consumed, 7 + 12);
@@ -163,7 +164,7 @@ void main() {
     () async {
       final ids = await itemIds();
       final shift = await repo.startShift((await repo.workerByPin('1111'))!.id);
-      await repo.setClosingQty(shift.id, ids['KAFA']!, 148700);
+      await repo.setClosingQty(shift.id, ids['KAFA']!, 144740);
       await repo.setClosingQty(shift.id, ids['KOLA']!, 70);
       await expectLater(
         repo.closeShift(shift.id),
@@ -189,7 +190,7 @@ void main() {
   test('zaključena smjena se ne može mijenjati', () async {
     final ids = await itemIds();
     final shift = await repo.startShift((await repo.workerByPin('1111'))!.id);
-    for (final e in {'KAFA': 148700, 'KOLA': 70, 'ĐUS': 50}.entries) {
+    for (final e in {'KAFA': 144740, 'KOLA': 70, 'ĐUS': 50}.entries) {
       await repo.setClosingQty(shift.id, ids[e.key]!, e.value);
     }
     await repo.closeShift(shift.id);
@@ -222,19 +223,24 @@ void main() {
     );
   });
 
-  test('brojač ne može ići unazad, a višak na zalihi se označava', () async {
-    final ids = await itemIds();
-    final shift = await repo.startShift((await repo.workerByPin('1111'))!.id);
-    await expectLater(
-      repo.setClosingQty(shift.id, ids['KAFA']!, 148000),
-      throwsA(isA<SankoException>()),
-    );
-    await repo.setClosingQty(shift.id, ids['KOLA']!, 80);
-    expect(
-      line(await repo.obracunForShift(shift.id), 'KOLA').hasAnomaly,
-      isTrue,
-    );
-  });
+  test(
+    'kafa se ne može prodati preko zalihe, a višak na zalihi se označava',
+    () async {
+      final ids = await itemIds();
+      final shift = await repo.startShift((await repo.workerByPin('1111'))!.id);
+      // 145.000 g je dovoljno za 7.250 kafa od 20 g.
+      await expectLater(
+        repo.setSoldQty(shift.id, ids['KAFA']!, 7251),
+        throwsA(isA<SankoException>()),
+      );
+      await repo.setSoldQty(shift.id, ids['KAFA']!, 7250);
+      await repo.setClosingQty(shift.id, ids['KOLA']!, 80);
+      expect(
+        line(await repo.obracunForShift(shift.id), 'KOLA').hasAnomaly,
+        isTrue,
+      );
+    },
+  );
 
   test('PIN je jedinstven i oslobađa se brisanjem radnika', () async {
     await expectLater(
@@ -282,7 +288,7 @@ void main() {
       final amra = (await repo.workerByPin('1111'))!;
       final shift = await repo.startShift(amra.id);
       await repo.addExpense(shift.id, description: 'Mlijeko', amount: 300);
-      await repo.setClosingQty(shift.id, ids['KAFA']!, 148787);
+      await repo.setClosingQty(shift.id, ids['KAFA']!, 143000);
       await repo.setClosingQty(shift.id, ids['KOLA']!, 67);
       await repo.setClosingQty(shift.id, ids['ĐUS']!, 56);
       await expectLater(
@@ -333,7 +339,7 @@ void main() {
       final amra = (await repo.workerByPin('1111'))!;
       final bakir = (await repo.workerByPin('2222'))!;
       final first = await repo.startShift(amra.id);
-      await repo.setClosingQty(first.id, ids['KAFA']!, 148787);
+      await repo.setClosingQty(first.id, ids['KAFA']!, 143000);
       await repo.setClosingQty(first.id, ids['KOLA']!, 77);
       await repo.setClosingQty(first.id, ids['ĐUS']!, 56);
       await repo.closeShift(first.id);
@@ -341,7 +347,7 @@ void main() {
 
       now = DateTime(2025, 7, 30, 15);
       final second = await repo.startShift(bakir.id);
-      await repo.setClosingQty(second.id, ids['KAFA']!, 148887);
+      await repo.setClosingQty(second.id, ids['KAFA']!, 141000);
       await repo.setClosingQty(second.id, ids['KOLA']!, 77);
       await repo.setClosingQty(second.id, ids['ĐUS']!, 56);
       await repo.closeShift(

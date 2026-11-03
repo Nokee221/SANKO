@@ -48,7 +48,8 @@ const _schema = [
     created_at INTEGER NOT NULL,
     image_id TEXT,
     min_qty INTEGER,
-    par_qty INTEGER
+    par_qty INTEGER,
+    portion INTEGER NOT NULL DEFAULT 1
   )''',
   '''
   CREATE TABLE shifts (
@@ -77,6 +78,7 @@ const _schema = [
     opening_qty INTEGER NOT NULL,
     closing_qty INTEGER,
     sold_qty INTEGER,
+    portion INTEGER NOT NULL DEFAULT 1,
     PRIMARY KEY (shift_id, item_id)
   )''',
   // Jedan ulaz je jedna dostava: unosi se, pa zaključi. closed_at NULL znači da je još u unosu.
@@ -118,7 +120,7 @@ Future<void> createSchema(Database db) async {
 
 Future<Database> openAppDatabase() async {
   final options = OpenDatabaseOptions(
-    version: 7,
+    version: 8,
     onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
     onCreate: (db, _) => createSchema(db),
     onUpgrade: (db, from, _) async {
@@ -165,6 +167,15 @@ Future<Database> openAppDatabase() async {
           "ALTER TABLE workers ADD COLUMN role TEXT NOT NULL DEFAULT 'konobar'",
         );
         await db.execute(_tables);
+      }
+      if (from < 8) {
+        // Kafa u gramima: grama po porciji uz artikal i uz stavku smjene.
+        await db.execute(
+          'ALTER TABLE items ADD COLUMN portion INTEGER NOT NULL DEFAULT 1',
+        );
+        await db.execute(
+          'ALTER TABLE shift_lines ADD COLUMN portion INTEGER NOT NULL DEFAULT 1',
+        );
       }
     },
   );

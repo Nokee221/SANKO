@@ -56,6 +56,7 @@ class RemoteShift {
           openingQty: l['opening_qty'] as int,
           closingQty: l['closing_qty'] as int?,
           imageId: l['image_id'] as String?,
+          portion: l['portion'] as int? ?? 1,
         ),
     ],
     receipts: [
@@ -131,6 +132,7 @@ class RemoteLine {
     required this.openingQty,
     required this.closingQty,
     this.imageId,
+    this.portion = 1,
   });
 
   final String itemId;
@@ -145,6 +147,9 @@ class RemoteLine {
 
   /// Slika artikla iz kataloga.
   final String? imageId;
+
+  /// Grama po porciji; zaliha kafe je u gramima, prodaje se po porciji.
+  final int portion;
 }
 
 class RemoteReceipt {

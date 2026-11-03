@@ -7,7 +7,6 @@ import 'admin_session.dart';
 import 'izvjestaj_page.dart';
 import 'items_page.dart';
 import 'narudzba_page.dart';
-import 'obavjestenja_page.dart';
 import 'obracun_page.dart';
 import 'prosjek_page.dart';
 import 'tables_page.dart';
@@ -163,12 +162,6 @@ class _MorePage extends StatelessWidget {
                     title: 'Stolovi',
                     subtitle: 'Za narudžbe sa stola',
                     onTap: () => _open(context, const TablesPage()),
-                  ),
-                  _Tile(
-                    icon: Icons.notifications_outlined,
-                    title: 'Obavještenja',
-                    subtitle: 'Poruka na Telegram kad se smjena zaključi',
-                    onTap: () => _open(context, const ObavjestenjaPage()),
                   ),
                 ],
               ),

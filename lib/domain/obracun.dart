@@ -12,6 +12,7 @@ class ObracunLine {
     required this.closing,
     required this.consumed,
     required this.amount,
+    this.portion = 1,
   });
 
   /// Red za jednu smjenu. Dok stanje nije uneseno, utrošeno i iznos su null.
@@ -23,13 +24,12 @@ class ObracunLine {
     required int opening,
     required int received,
     required int? closing,
+    int portion = 1,
   }) {
-    int? consumed;
-    if (closing != null) {
-      consumed = kind == ItemKind.stock
-          ? opening + received - closing
-          : closing - opening;
-    }
+    // Kafa se vodi u gramima: prodane porcije su potrošeni grami kroz gramažu porcije.
+    final consumed = closing == null
+        ? null
+        : (opening + received - closing) ~/ portion;
     return ObracunLine(
       itemId: itemId,
       name: name,
@@ -40,6 +40,7 @@ class ObracunLine {
       closing: closing,
       consumed: consumed,
       amount: consumed == null ? null : consumed * price,
+      portion: portion,
     );
   }
 
@@ -48,14 +49,17 @@ class ObracunLine {
   final ItemKind kind;
   final int price;
 
-  /// Ostatak iz prethodne smjene, odnosno prethodno stanje brojača.
+  /// Grama po porciji kod artikla u gramima (kafa); inače 1.
+  final int portion;
+
+  /// Ostatak iz prethodne smjene; kod kafe u gramima.
   final int opening;
   final int received;
   final int? closing;
   final int? consumed;
   final int? amount;
 
-  int get total => kind == ItemKind.stock ? opening + received : opening;
+  int get total => opening + received;
 
   /// Prebrojano je više nego što je moglo biti: zaboravljen ulaz ili greška u brojanju.
   bool get hasAnomaly => consumed != null && consumed! < 0;
@@ -138,6 +142,7 @@ class Obracun {
           closing: l.closing,
           consumed: sum(prev.consumed, l.consumed),
           amount: sum(prev.amount, l.amount),
+          portion: l.portion,
         );
       }
     }

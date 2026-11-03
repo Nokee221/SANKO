@@ -229,6 +229,7 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
     String? imageId,
     int? minQty,
     int? parQty,
+    int portion = 1,
   }) {
     if (name.trim().isEmpty) throw SankoException('Unesite naziv artikla.');
     return _write(
@@ -242,6 +243,7 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
         // Starija baza nema minimum; bez njega upis i dalje prolazi.
         'min_qty': ?minQty,
         'par_qty': ?parQty,
+        'portion': portion,
       }),
     );
   }
@@ -262,6 +264,7 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
             'price': i.price,
             'initial_qty': i.initialQty,
             'image_id': i.imageId,
+            'portion': i.portion,
           },
       ]),
     );
@@ -283,6 +286,7 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
             'image_id': item.imageId,
             'min_qty': item.minQty,
             'par_qty': item.parQty,
+            'portion': item.portion,
           })
           .eq('id', item.id),
     );
@@ -304,6 +308,7 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
           'price': price,
           'initial_qty': qty,
           'sort_order': i + 1,
+          'portion': demoPortions[name] ?? 1,
         },
     ]),
   );

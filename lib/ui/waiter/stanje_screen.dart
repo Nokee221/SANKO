@@ -34,9 +34,10 @@ class _StanjeScreenState extends State<StanjeScreen> {
       mode: 'Prodano',
       itemName: line.name,
       color: ModeColors.stanje,
-      hint:
-          '${fmtKm(line.price)} po komadu · '
-          '${counter ? 'brojač na početku ${line.opening}' : 'na šanku ${line.total}'}',
+      hint: counter
+          ? '${fmtKm(line.price)} po porciji · na zalihi ${fmtGrams(line.total)} '
+                '(${line.portion} g po porciji)'
+          : '${fmtKm(line.price)} po komadu · na šanku ${line.total}',
       initial: line.consumed,
     );
     if (result == null || !mounted) return;
@@ -106,7 +107,7 @@ class _StanjeScreenState extends State<StanjeScreen> {
                                 ? 0
                                 : (lines.length - missing) / lines.length,
                             color: ModeColors.stanje,
-                            backgroundColor: SankoColors.line,
+                            backgroundColor: WaiterColors.raised,
                             minHeight: 6,
                             borderRadius: BorderRadius.circular(3),
                           ),
@@ -118,12 +119,12 @@ class _StanjeScreenState extends State<StanjeScreen> {
                       label: const Text('Samo neuneseno'),
                       selected: _onlyMissing,
                       showCheckmark: false,
-                      backgroundColor: Colors.white,
-                      selectedColor: ModeColors.stanje.withValues(alpha: 0.14),
+                      backgroundColor: WaiterColors.surface,
+                      selectedColor: ModeColors.stanje.withValues(alpha: 0.3),
                       side: BorderSide(
                         color: _onlyMissing
                             ? ModeColors.stanje
-                            : SankoColors.line,
+                            : WaiterColors.line,
                       ),
                       shape: const StadiumBorder(),
                       onSelected: (v) => setState(() => _onlyMissing = v),
@@ -148,7 +149,7 @@ class _StanjeScreenState extends State<StanjeScreen> {
                           image: images[l.itemId],
                           color: ModeColors.stanje,
                           value: l.consumed?.toString(),
-                          note: l.kind == ItemKind.counter ? 'brojač' : null,
+                          note: l.kind == ItemKind.counter ? 'porcije' : null,
                           onTap: () => _edit(l),
                         ),
                     ],

@@ -72,7 +72,7 @@ class _PredajaScreenState extends State<PredajaScreen> {
               style: TextStyle(
                 color: difference < 0
                     ? Theme.of(context).colorScheme.error
-                    : SankoColors.ink,
+                    : WaiterColors.text,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -119,7 +119,7 @@ class _PredajaScreenState extends State<PredajaScreen> {
         labelText: label,
         hintText: hint,
         suffixText: 'KM',
-        fillColor: Colors.white,
+        fillColor: WaiterColors.raised,
         errorText: _amount(controller) == null
             ? 'Neispravan iznos. Primjer: 120,50'
             : null,
@@ -231,7 +231,7 @@ class _Row extends StatelessWidget {
             style: TextStyle(
               fontSize: big ? 17 : 15,
               fontWeight: big ? FontWeight.w700 : FontWeight.w500,
-              color: big ? SankoColors.ink : SankoColors.muted,
+              color: big ? WaiterColors.text : WaiterColors.muted,
             ),
           ),
         ),
@@ -241,7 +241,7 @@ class _Row extends StatelessWidget {
             fontSize: big ? 26 : 18,
             fontWeight: big ? FontWeight.w800 : FontWeight.w700,
             fontFeatures: tabularFigures,
-            color: SankoColors.ink,
+            color: WaiterColors.text,
           ),
         ),
       ],

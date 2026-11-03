@@ -27,8 +27,8 @@ class NumberPad extends StatelessWidget {
   Widget build(BuildContext context) {
     final keyColor = dark
         ? Colors.white.withValues(alpha: 0.08)
-        : SankoColors.paper;
-    final foreground = dark ? Colors.white : SankoColors.ink;
+        : WaiterColors.raised;
+    final foreground = dark ? Colors.white : WaiterColors.text;
 
     Widget key(Widget child, VoidCallback onTap) => Expanded(
       child: Padding(
@@ -171,14 +171,24 @@ class _QtyPadState extends State<_QtyPad> {
         children: [
           Container(
             width: double.infinity,
-            color: widget.color,
-            padding: const EdgeInsets.fromLTRB(24, 18, 24, 18),
+            decoration: const BoxDecoration(
+              color: SankoColors.navy,
+              border: Border(
+                bottom: BorderSide(color: SankoColors.brass, width: 2),
+              ),
+            ),
+            padding: const EdgeInsets.fromLTRB(24, 22, 24, 16),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  widget.mode,
-                  style: const TextStyle(color: Colors.white70, fontSize: 14),
+                  widget.mode.toUpperCase(),
+                  style: const TextStyle(
+                    color: SankoColors.brass,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 1.2,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -202,7 +212,7 @@ class _QtyPadState extends State<_QtyPad> {
                     widget.hint!,
                     textAlign: TextAlign.center,
                     style: const TextStyle(
-                      color: SankoColors.muted,
+                      color: WaiterColors.muted,
                       fontSize: 14,
                     ),
                   ),
@@ -216,7 +226,9 @@ class _QtyPadState extends State<_QtyPad> {
                       fontWeight: FontWeight.w800,
                       letterSpacing: -1,
                       fontFeatures: tabularFigures,
-                      color: _digits.isEmpty ? SankoColors.line : widget.color,
+                      color: _digits.isEmpty
+                          ? WaiterColors.muted
+                          : widget.color,
                     ),
                   ),
                 ),
@@ -252,6 +264,7 @@ class _QtyPadState extends State<_QtyPad> {
                           child: FilledButton(
                             style: FilledButton.styleFrom(
                               backgroundColor: widget.color,
+                              foregroundColor: Colors.white,
                             ),
                             onPressed: _digits.isEmpty
                                 ? null

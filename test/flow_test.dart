@@ -88,6 +88,7 @@ void main() {
             price: item.price,
             initialQty: item.initialQty,
             imageId: image?.id,
+            portion: item.portion,
           ),
         );
       }
@@ -146,20 +147,23 @@ void main() {
     expect(find.textContaining('Unesite kod lokala'), findsOneWidget);
     await tester.enterText(find.byType(TextField), 'test01');
     await tester.pump();
+    await settleImages();
     await _shot('00_kod_lokala');
     await tapText('Dalje');
     expect(find.text('Unesite svoj PIN'), findsOneWidget);
+    await settleImages();
     await _shot('01_pin');
 
     await enterPin('9999');
     expect(find.text('Pogrešan kod lokala ili PIN.'), findsOneWidget);
 
     await enterPin('1111');
-    // Konobar bira između narudžbe i obračuna.
-    expect(find.text('NARUDŽBA'), findsOneWidget);
-    await tapText('OBRAČUN');
+    // Konobar prvo započinje smjenu, pa bira između narudžbe i obračuna.
+    expect(find.text('NARUDŽBA'), findsNothing);
     expect(find.text('Započni smjenu'), findsOneWidget);
     await tapText('Započni smjenu');
+    expect(find.text('NARUDŽBA'), findsOneWidget);
+    await tapText('OBRAČUN');
     expect(find.text('ULAZ'), findsOneWidget);
     expect(find.text('0/33'), findsOneWidget);
     expect(find.text('Sve je poslano na server'), findsOneWidget);
@@ -170,7 +174,11 @@ void main() {
 
     // ULAZ
     await tapText('ULAZ');
-    expect(find.text('KAFA'), findsNothing, reason: 'brojač nema ulaz');
+    expect(
+      find.text('u gramima'),
+      findsNWidgets(2),
+      reason: 'kafa i nes u gramima',
+    );
     await enterQty('KAPUCINO', '32');
     await enterQty('ĐUS', '12', negative: true);
     await tapText('KOLA');
@@ -207,7 +215,7 @@ void main() {
     await tapText('STANJE');
     await tapText('KAFA');
     expect(
-      find.text('2,50 KM po komadu · brojač na početku 148687'),
+      find.text('2,50 KM po porciji · na zalihi 145.000 g (20 g po porciji)'),
       findsOneWidget,
     );
     for (final d in '404'.split('')) {
@@ -300,7 +308,6 @@ void main() {
       await other.startShift('nova');
     });
     await enterPin('1111');
-    await tapText('OBRAČUN');
     await tapText('Započni smjenu');
     expect(
       find.textContaining('Smjenu još nije zaključio/la Bakir'),
@@ -407,8 +414,7 @@ void main() {
     expect(find.text('KOLA'), findsOneWidget);
     expect(find.text('ĐUS'), findsOneWidget);
     await _shot('15_admin_narudzba');
-    await tapText('Obavještenja');
-    expect(find.textContaining('još nisu podešena'), findsOneWidget);
+    expect(find.text('Obavještenja'), findsNothing, reason: 'za sada skriveno');
 
     await tapText('Prosjek');
     expect(find.textContaining('Zadnjih 30 dana:'), findsOneWidget);

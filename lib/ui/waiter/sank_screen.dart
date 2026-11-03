@@ -167,7 +167,7 @@ class _SankScreenState extends State<SankScreen> {
                         Icon(
                           Icons.local_bar_outlined,
                           size: 56,
-                          color: SankoColors.muted,
+                          color: WaiterColors.muted,
                         ),
                         SizedBox(height: 12),
                         Text(
@@ -175,7 +175,7 @@ class _SankScreenState extends State<SankScreen> {
                           textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 17,
-                            color: SankoColors.muted,
+                            color: WaiterColors.muted,
                           ),
                         ),
                       ],
@@ -198,7 +198,7 @@ class _SankScreenState extends State<SankScreen> {
                           child: Text(
                             'Tap otvara narudžbu, povlačenje udesno je završava.',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: SankoColors.muted),
+                            style: TextStyle(color: WaiterColors.muted),
                           ),
                         ),
                       ],
@@ -259,7 +259,7 @@ class _OrderCard extends StatelessWidget {
           ),
         ),
         child: Material(
-          color: Colors.white,
+          color: WaiterColors.surface,
           borderRadius: BorderRadius.circular(18),
           child: InkWell(
             borderRadius: BorderRadius.circular(18),
@@ -268,7 +268,7 @@ class _OrderCard extends StatelessWidget {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: late ? ModeColors.rashod : SankoColors.line,
+                  color: late ? ModeColors.rashod : WaiterColors.line,
                   width: late ? 2 : 1,
                 ),
               ),
@@ -284,7 +284,7 @@ class _OrderCard extends StatelessWidget {
                           style: const TextStyle(
                             fontSize: 22,
                             fontWeight: FontWeight.w800,
-                            color: SankoColors.ink,
+                            color: WaiterColors.text,
                           ),
                         ),
                       ),
@@ -293,12 +293,12 @@ class _OrderCard extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 15,
                           fontWeight: late ? FontWeight.w800 : FontWeight.w500,
-                          color: late ? ModeColors.rashod : SankoColors.muted,
+                          color: late ? ModeColors.rashod : WaiterColors.muted,
                         ),
                       ),
                       Icon(
                         expanded ? Icons.expand_less : Icons.expand_more,
-                        color: SankoColors.muted,
+                        color: WaiterColors.muted,
                       ),
                     ],
                   ),
@@ -309,7 +309,7 @@ class _OrderCard extends StatelessWidget {
                     '${order.note != null ? ' · napomena' : ''}',
                     style: const TextStyle(
                       fontSize: 15,
-                      color: SankoColors.muted,
+                      color: WaiterColors.muted,
                     ),
                   ),
                   if (expanded) ...[
@@ -326,7 +326,7 @@ class _OrderCard extends StatelessWidget {
                                 style: const TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.w800,
-                                  color: ModeColors.narudzba,
+                                  color: WaiterColors.brassText,
                                   fontFeatures: tabularFigures,
                                 ),
                               ),
@@ -349,7 +349,7 @@ class _OrderCard extends StatelessWidget {
                         margin: const EdgeInsets.only(top: 8),
                         padding: const EdgeInsets.all(10),
                         decoration: BoxDecoration(
-                          color: SankoColors.waiting.withValues(alpha: 0.18),
+                          color: WaiterColors.brass.withValues(alpha: 0.14),
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(

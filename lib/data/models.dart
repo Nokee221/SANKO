@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
-/// Vrsta artikla: zaliha se broji na komad, brojač je stanje s aparata koje samo raste.
+/// Vrsta artikla: zaliha se broji na komad, a kafa i slično ("brojač") se vodi u
+/// gramima i prodaje po porciji od [Item.portion] grama.
 enum ItemKind { stock, counter }
 
 /// Konobar kuca narudžbe i vodi knjigu šanka; šank samo prima narudžbe.
@@ -53,11 +54,15 @@ class Item {
     this.imageId,
     this.minQty,
     this.parQty,
+    this.portion = 1,
   });
 
   final String id;
   final String name;
   final ItemKind kind;
+
+  /// Grama po porciji kod artikla koji se vodi u gramima (kafa: npr. 20); inače 1.
+  final int portion;
 
   /// Zaliha na kojoj artikal ide na listu za narudžbu; null znači da se ne prati.
   final int? minQty;
@@ -86,6 +91,7 @@ class Item {
     active: r['active'] as bool,
     minQty: r['min_qty'] as int?,
     parQty: r['par_qty'] as int?,
+    portion: r['portion'] as int? ?? 1,
   );
 
   factory Item.fromRow(Map<String, Object?> r) => Item(
@@ -99,6 +105,7 @@ class Item {
     active: r['active'] == 1,
     minQty: r['min_qty'] as int?,
     parQty: r['par_qty'] as int?,
+    portion: r['portion'] as int? ?? 1,
   );
 }
 
@@ -201,6 +208,7 @@ class NewItem {
     required this.price,
     this.initialQty = 0,
     this.imageId,
+    this.portion = 1,
   });
 
   final String name;
@@ -208,6 +216,7 @@ class NewItem {
   final int price;
   final int initialQty;
   final String? imageId;
+  final int portion;
 }
 
 /// Slika iz zajedničkog kataloga.

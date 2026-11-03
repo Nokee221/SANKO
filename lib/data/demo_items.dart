@@ -1,9 +1,10 @@
 import 'models.dart';
 
 /// Artikli i stanja iz primjera knjige šanka, za isprobavanje: naziv, vrsta, cijena, stanje.
+/// Kafa i nes iz aparata se vode u gramima; gramaža porcije je u [demoPortions].
 const demoItems = <(String, ItemKind, int, int)>[
-  ('KAFA', ItemKind.counter, 250, 148687),
-  ('NES APARAT', ItemKind.counter, 350, 68779),
+  ('KAFA', ItemKind.counter, 250, 145000),
+  ('NES APARAT', ItemKind.counter, 350, 50000),
   ('KAPUCINO', ItemKind.stock, 350, 40),
   ('ČAJ', ItemKind.stock, 300, 214),
   ('NES', ItemKind.stock, 350, 65),
@@ -36,3 +37,6 @@ const demoItems = <(String, ItemKind, int, int)>[
   ('GRAŠEVINA', ItemKind.stock, 600, 26),
   ('VRANAC', ItemKind.stock, 600, 12),
 ];
+
+/// Grama po porciji za probne artikle koji se vode u gramima.
+const demoPortions = {'KAFA': 20, 'NES APARAT': 15};

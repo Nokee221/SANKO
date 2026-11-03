@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../data/models.dart';
 import '../../domain/obracun.dart';
 import '../common.dart';
+import '../theme.dart';
 import 'item_tile.dart';
 import 'number_pad.dart';
 import 'scope.dart';
@@ -32,12 +33,22 @@ class ModeScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: color,
+        backgroundColor: SankoColors.navy,
         foregroundColor: Colors.white,
-        toolbarHeight: 76,
+        toolbarHeight: 84,
         titleSpacing: 0,
         title: Row(
           children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: color,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Icon(icon, color: Colors.white, size: 24),
+            ),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -45,9 +56,9 @@ class ModeScaffold extends StatelessWidget {
                   Text(
                     title,
                     style: const TextStyle(
-                      fontSize: 26,
+                      fontSize: 24,
                       fontWeight: FontWeight.w800,
-                      letterSpacing: 0.5,
+                      letterSpacing: 1,
                     ),
                   ),
                   Text(
@@ -58,15 +69,15 @@ class ModeScaffold extends StatelessWidget {
                 ],
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(right: 20),
-              child: Icon(
-                icon,
-                size: 30,
-                color: Colors.white.withValues(alpha: 0.85),
-              ),
-            ),
           ],
+        ),
+        // Tanka mesingana linija ispod zaglavlja.
+        bottom: const PreferredSize(
+          preferredSize: Size.fromHeight(2),
+          child: ColoredBox(
+            color: SankoColors.brass,
+            child: SizedBox(height: 2, width: double.infinity),
+          ),
         ),
       ),
       body: body,
@@ -100,7 +111,10 @@ class ModeButton extends StatelessWidget {
     return SizedBox(
       height: 58,
       child: FilledButton(
-        style: FilledButton.styleFrom(backgroundColor: color),
+        style: FilledButton.styleFrom(
+          backgroundColor: color,
+          foregroundColor: Colors.white,
+        ),
         onPressed: onPressed,
         child: Text(label),
       ),
@@ -142,10 +156,14 @@ class UlazScreen extends StatelessWidget {
   ) async {
     final result = await showQtyPad(
       context,
-      mode: 'Primljena količina',
+      mode: line.kind == ItemKind.counter
+          ? 'Primljeno grama'
+          : 'Primljena količina',
       itemName: line.name,
       color: ModeColors.ulaz,
-      hint: 'Za povrat ili ispravku unesite minus (+/−)',
+      hint: line.kind == ItemKind.counter
+          ? 'U gramima, npr. 1000 za paket od 1 kg. Za ispravku minus (+/−)'
+          : 'Za povrat ili ispravku unesite minus (+/−)',
       initial: current,
       allowNegative: true,
     );
@@ -201,9 +219,7 @@ class UlazScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Loader<_UlazData>(
       load: (repo) async => _UlazData(
-        (await repo.obracunForShift(
-          shiftId,
-        )).lines.where((l) => l.kind == ItemKind.stock).toList(),
+        (await repo.obracunForShift(shiftId)).lines,
         await repo.draftReceipt(shiftId),
         await repo.lineImages(shiftId),
       ),
@@ -237,6 +253,8 @@ class UlazScreen extends StatelessWidget {
                       : null,
                   note: l.received != 0
                       ? 'ranije ${_signed(l.received)}'
+                      : l.kind == ItemKind.counter
+                      ? 'u gramima'
                       : null,
                   onTap: () => _edit(context, l, data.draft[l.itemId]),
                 ),

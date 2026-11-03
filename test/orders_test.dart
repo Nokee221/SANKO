@@ -9,8 +9,13 @@ import 'package:sanko/waiter_app.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import 'support/fake_backend.dart';
+import 'support/shots.dart';
 
 void main() {
+  setUpAll(() async {
+    if (shotsEnabled) await loadShotFonts();
+  });
+
   late Database serverDb;
   late Database phoneDb;
   late Repository server;
@@ -89,11 +94,17 @@ void main() {
     await tester.runAsync(() => server.addTables(['Sto 1', 'Sto 2']));
     await login(tester, '1111');
 
+    // Bez započete smjene nema ni narudžbe ni obračuna.
+    expect(find.text('NARUDŽBA'), findsNothing);
+    await shot('30_pocetak_smjene');
+    await tapText(tester, 'Započni smjenu');
     expect(find.text('NARUDŽBA'), findsOneWidget);
+    await shot('31_konobar_pocetna');
     expect(find.text('OBRAČUN'), findsOneWidget);
     await tapText(tester, 'NARUDŽBA');
     expect(find.text('Izaberite sto'), findsOneWidget);
     expect(find.text('Bez stola'), findsOneWidget);
+    await shot('32_izbor_stola');
     await tapText(tester, 'Sto 2');
 
     await tapText(tester, 'KAFA');
@@ -108,6 +119,7 @@ void main() {
     await tapText(tester, 'Napomena');
     await tester.enterText(find.byType(TextField), 'kafa bez šećera');
     await tapText(tester, 'Spremi');
+    await shot('33_narudzba');
     await tapText(tester, 'Naruči · 3 kom · ${fmtKm(850)}');
     expect(find.text('Poslano na šank: Sto 2'), findsOneWidget);
     expect(find.text('Izaberite sto'), findsOneWidget, reason: 'sljedeći sto');
@@ -133,11 +145,13 @@ void main() {
     await tapText(tester, 'Moje');
     expect(find.text('Danas 2 narudžbe · ${fmtKm(1150)}'), findsOneWidget);
     expect(find.text('Šank sprema'), findsNWidgets(2));
+    await shot('34_moje_narudzbe');
   });
 
   testWidgets('lokal bez stolova kuca odmah artikle', (tester) async {
     await setUpPhone(tester);
     await login(tester, '1111');
+    await tapText(tester, 'Započni smjenu');
     await tapText(tester, 'NARUDŽBA');
     expect(find.text('Izaberite sto'), findsNothing);
     await tapText(tester, 'KOLA');
@@ -172,6 +186,7 @@ void main() {
     expect(find.text('KOLA'), findsOneWidget);
     expect(find.text('2×'), findsOneWidget);
     expect(find.text('kafa bez šećera'), findsOneWidget);
+    await shot('35_sank');
 
     await tester.drag(find.text('Sto 2'), const Offset(600, 0));
     await tester.pumpAndSettle();

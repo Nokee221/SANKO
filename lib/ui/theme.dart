@@ -20,6 +20,25 @@ abstract final class SankoColors {
   static const failed = Color(0xFFFF8A80);
 }
 
+/// Boje aplikacije konobara: bijele kartice na svijetloj podlozi, tamnoplava
+/// zaglavlja i mesing kao naglasak.
+abstract final class WaiterColors {
+  static const bg = SankoColors.paper;
+
+  /// Kartice i pločice.
+  static const surface = Colors.white;
+
+  /// Polja za unos i tipke.
+  static const raised = Color(0xFFEDF0F5);
+  static const line = SankoColors.line;
+  static const text = SankoColors.ink;
+  static const muted = SankoColors.muted;
+  static const brass = SankoColors.brass;
+
+  /// Mesing dovoljno taman za tekst na bijelom.
+  static const brassText = Color(0xFF9A7632);
+}
+
 /// Brojevi iste širine, da se količine i iznosi ne pomjeraju dok se mijenjaju.
 const tabularFigures = [FontFeature.tabularFigures()];
 

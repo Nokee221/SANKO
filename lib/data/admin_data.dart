@@ -38,6 +38,7 @@ abstract interface class AdminData implements Listenable {
     String? imageId,
     int? minQty,
     int? parQty,
+    int portion,
   });
 
   /// Upisuje više artikala odjednom, redom iza postojećih; npr. uvoz iz Excela.

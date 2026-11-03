@@ -186,8 +186,12 @@ class Repository extends ChangeNotifier implements AdminData {
     String? imageId,
     int? minQty,
     int? parQty,
+    int portion = 1,
   }) async {
     if (name.trim().isEmpty) throw SankoException('Unesite naziv artikla.');
+    if (portion <= 0) {
+      throw SankoException('Gramaža porcije mora biti veća od nule.');
+    }
     await _db.transaction((txn) async {
       final next = await txn.rawQuery(
         'SELECT COALESCE(MAX(sort_order), 0) + 1 AS n FROM items',
@@ -205,6 +209,7 @@ class Repository extends ChangeNotifier implements AdminData {
         'image_id': imageId,
         'min_qty': minQty,
         'par_qty': parQty,
+        'portion': portion,
       });
       // Artikal dodan usred smjene ulazi odmah u nju, da ga konobar može primiti i prebrojati.
       final open = await txn.query('shifts', where: 'closed_at IS NULL');
@@ -217,6 +222,7 @@ class Repository extends ChangeNotifier implements AdminData {
           'price': price,
           'sort_order': sortOrder,
           'opening_qty': initialQty,
+          'portion': portion,
         });
       }
     });
@@ -239,6 +245,7 @@ class Repository extends ChangeNotifier implements AdminData {
         'image_id': item.imageId,
         'min_qty': item.minQty,
         'par_qty': item.parQty,
+        'portion': item.portion,
       },
       where: 'id = ?',
       whereArgs: [item.id],
@@ -302,8 +309,9 @@ class Repository extends ChangeNotifier implements AdminData {
       });
       await txn.rawInsert(
         '''
-        INSERT INTO shift_lines (shift_id, item_id, item_name, kind, price, sort_order, opening_qty)
-        SELECT ?, i.id, i.name, i.kind, i.price, i.sort_order,
+        INSERT INTO shift_lines
+          (shift_id, item_id, item_name, kind, price, sort_order, portion, opening_qty)
+        SELECT ?, i.id, i.name, i.kind, i.price, i.sort_order, i.portion,
           COALESCE(
             (SELECT l.closing_qty
              FROM shift_lines l JOIN shifts s ON s.id = l.shift_id
@@ -323,19 +331,8 @@ class Repository extends ChangeNotifier implements AdminData {
   /// Upisuje prebrojano stanje artikla; null briše unos.
   Future<void> setClosingQty(String shiftId, String itemId, int? qty) async {
     await _requireOpen(shiftId);
-    if (qty != null) {
-      final line = await _db.query(
-        'shift_lines',
-        where: 'shift_id = ? AND item_id = ?',
-        whereArgs: [shiftId, itemId],
-      );
-      if (qty < 0) throw SankoException('Stanje ne može biti negativno.');
-      if (line.single['kind'] == ItemKind.counter.name &&
-          qty < (line.single['opening_qty'] as int)) {
-        throw SankoException(
-          'Brojač ne može biti manji od prethodnog stanja (${line.single['opening_qty']}).',
-        );
-      }
+    if (qty != null && qty < 0) {
+      throw SankoException('Stanje ne može biti negativno.');
     }
     await _db.update(
       'shift_lines',
@@ -356,22 +353,23 @@ class Repository extends ChangeNotifier implements AdminData {
       if (sold < 0) throw SankoException('Prodano ne može biti negativno.');
       final line = (await _db.rawQuery(
         '''
-        SELECT l.kind, l.opening_qty, $_receivedSql AS received
+        SELECT l.kind, l.opening_qty, l.portion, $_receivedSql AS received
         FROM shift_lines l WHERE l.shift_id = ? AND l.item_id = ?
         ''',
         [shiftId, itemId],
       )).single;
-      final opening = line['opening_qty'] as int;
-      if (line['kind'] == ItemKind.counter.name) {
-        closing = opening + sold;
-      } else {
-        final available = opening + (line['received'] as int);
-        closing = available - sold;
-        if (closing < 0) {
-          throw SankoException(
-            'Na šanku je bilo samo $available. Ako je stigla roba, prvo je unesite u ULAZ.',
-          );
-        }
+      final portion = line['portion'] as int;
+      final available =
+          (line['opening_qty'] as int) + (line['received'] as int);
+      // Kafa se vodi u gramima: svaka porcija skida svoju gramažu.
+      closing = available - sold * portion;
+      if (closing < 0) {
+        throw SankoException(
+          line['kind'] == ItemKind.counter.name
+              ? 'Na zalihi je samo $available g, dovoljno za ${available ~/ portion} porcija. '
+                    'Ako je stigla roba, prvo je unesite u ULAZ.'
+              : 'Na šanku je bilo samo $available. Ako je stigla roba, prvo je unesite u ULAZ.',
+        );
       }
     }
     await _db.update(
@@ -397,8 +395,7 @@ class Repository extends ChangeNotifier implements AdminData {
   Future<int> _recomputeFromSold(String shiftId) async {
     const t = 'shift_lines';
     final closing =
-        "(CASE WHEN $t.kind = 'counter' THEN $t.opening_qty + $t.sold_qty "
-        'ELSE $t.opening_qty + ${_receivedOf(t)} - $t.sold_qty END)';
+        '($t.opening_qty + ${_receivedOf(t)} - $t.sold_qty * $t.portion)';
     const open =
         '$t.shift_id = ? AND $t.sold_qty IS NOT NULL AND '
         '(SELECT s.closed_at FROM shifts s WHERE s.id = $t.shift_id) IS NULL';
@@ -573,7 +570,8 @@ class Repository extends ChangeNotifier implements AdminData {
   Future<List<StatLine>> statLines(DateTime from, DateTime to) async {
     final rows = await _db.rawQuery(
       '''
-      SELECT l.item_id, l.item_name, l.kind, l.price, l.sort_order, l.opening_qty, l.closing_qty,
+      SELECT l.item_id, l.item_name, l.kind, l.price, l.sort_order, l.portion,
+        l.opening_qty, l.closing_qty,
         s.business_date, s.id AS shift_id, s.seq, w.name AS worker_name,
         (SELECT COALESCE(SUM(rl.qty), 0)
          FROM receipt_lines rl JOIN receipts r ON r.id = rl.receipt_id
@@ -608,6 +606,7 @@ class Repository extends ChangeNotifier implements AdminData {
             opening: r['opening_qty'] as int,
             received: r['received'] as int,
             closing: r['closing_qty'] as int,
+            portion: r['portion'] as int,
           ).consumed!,
         ),
     ];
@@ -646,9 +645,6 @@ class Repository extends ChangeNotifier implements AdminData {
 
         final received = c.received;
         if (received != null && received != line.received) {
-          if (line.kind == ItemKind.counter) {
-            throw SankoException('${line.name} je brojač i nema ulaz.');
-          }
           final receiptId = _uuid.v4();
           await txn.insert('receipts', {
             'id': receiptId,
@@ -669,11 +665,6 @@ class Repository extends ChangeNotifier implements AdminData {
           if (closing < 0) {
             throw SankoException('Ostatak ne može biti negativan.');
           }
-          if (line.kind == ItemKind.counter && closing < line.opening) {
-            throw SankoException(
-              'Brojač za ${line.name} ne može biti manji od prethodnog stanja (${line.opening}).',
-            );
-          }
           await txn.update(
             'shift_lines',
             {'closing_qty': closing},
@@ -691,14 +682,6 @@ class Repository extends ChangeNotifier implements AdminData {
             [c.itemId, shift.openedAt.millisecondsSinceEpoch],
           );
           if (next.isNotEmpty) {
-            final nextClosing = next.single['closing_qty'] as int?;
-            if (line.kind == ItemKind.counter &&
-                nextClosing != null &&
-                nextClosing < closing) {
-              throw SankoException(
-                'Brojač za ${line.name} bi u sljedećoj smjeni bio manji od početnog stanja.',
-              );
-            }
             await txn.update(
               'shift_lines',
               {'opening_qty': closing},
@@ -959,6 +942,7 @@ class Repository extends ChangeNotifier implements AdminData {
             opening: r['opening_qty'] as int,
             received: r['received'] as int,
             closing: r['closing_qty'] as int?,
+            portion: r['portion'] as int,
           ),
       ],
       expenses: spent.first['n'] as int,
@@ -992,6 +976,7 @@ class Repository extends ChangeNotifier implements AdminData {
         price: i.price,
         initialQty: i.initialQty,
         imageId: i.imageId,
+        portion: i.portion,
       );
     }
   }
@@ -1000,7 +985,13 @@ class Repository extends ChangeNotifier implements AdminData {
   @override
   Future<void> seedDemoItems() async {
     for (final (name, kind, price, qty) in demoItems) {
-      await addItem(name: name, kind: kind, price: price, initialQty: qty);
+      await addItem(
+        name: name,
+        kind: kind,
+        price: price,
+        initialQty: qty,
+        portion: demoPortions[name] ?? 1,
+      );
     }
   }
 
@@ -1107,6 +1098,7 @@ class Repository extends ChangeNotifier implements AdminData {
             openingQty: l['opening_qty'] as int,
             closingQty: l['closing_qty'] as int?,
             imageId: l['image_id'] as String?,
+            portion: l['portion'] as int,
           ),
       ],
       receipts: [
@@ -1194,6 +1186,7 @@ class Repository extends ChangeNotifier implements AdminData {
           'sort_order': l.sortOrder,
           'opening_qty': l.openingQty,
           'closing_qty': isNew ? l.closingQty : null,
+          'portion': l.portion,
         });
         changed = true;
       }
@@ -1201,8 +1194,16 @@ class Repository extends ChangeNotifier implements AdminData {
       if (!isNew) {
         for (final l in remote.lines) {
           final updated = await txn.rawUpdate(
-            'UPDATE shift_lines SET opening_qty = ? WHERE shift_id = ? AND item_id = ? AND opening_qty <> ?',
-            [l.openingQty, remote.id, l.itemId, l.openingQty],
+            'UPDATE shift_lines SET opening_qty = ?, portion = ? '
+            'WHERE shift_id = ? AND item_id = ? AND (opening_qty <> ? OR portion <> ?)',
+            [
+              l.openingQty,
+              l.portion,
+              remote.id,
+              l.itemId,
+              l.openingQty,
+              l.portion,
+            ],
           );
           if (updated > 0) changed = true;
         }

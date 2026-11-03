@@ -557,7 +557,7 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
                       ),
                       Text(
                         l.kind == ItemKind.counter
-                            ? 'Prethodno stanje brojača ${l.opening}'
+                            ? 'Bilo ukupno ${fmtGrams(l.total)}'
                             : 'Bilo ukupno ${l.total}',
                         style: muted,
                       ),
@@ -730,9 +730,8 @@ class _CorrectShiftDialogState extends State<_CorrectShiftDialog> {
     final closing = int.tryParse(_closing[l.itemId]!.text.trim());
     final received = int.tryParse(_received[l.itemId]!.text.trim());
     if (closing == null || received == null) return null;
-    return l.kind == ItemKind.counter
-        ? closing - l.opening
-        : l.opening + received - closing;
+    // Kod kafe su ulaz i ostatak u gramima, a utrošeno u porcijama.
+    return (l.opening + received - closing) ~/ l.portion;
   }
 
   Future<void> _save() async {
@@ -871,24 +870,24 @@ class _CorrectShiftDialogState extends State<_CorrectShiftDialog> {
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      if (l.kind != ItemKind.counter) ...[
-                        Expanded(
-                          child: field(
-                            _received[l.itemId]!,
-                            'primljeno-${l.itemId}',
-                            width: null,
-                            label: 'Primljeno',
-                          ),
+                      Expanded(
+                        child: field(
+                          _received[l.itemId]!,
+                          'primljeno-${l.itemId}',
+                          width: null,
+                          label: l.kind == ItemKind.counter
+                              ? 'Primljeno (g)'
+                              : 'Primljeno',
                         ),
-                        const SizedBox(width: 8),
-                      ],
+                      ),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: field(
                           _closing[l.itemId]!,
                           'ostatak-${l.itemId}',
                           width: null,
                           label: l.kind == ItemKind.counter
-                              ? 'Brojač'
+                              ? 'Ostatak (g)'
                               : 'Ostatak',
                         ),
                       ),
@@ -924,18 +923,7 @@ class _CorrectShiftDialogState extends State<_CorrectShiftDialog> {
                     style: const TextStyle(fontWeight: FontWeight.w700),
                   ),
                 ),
-                // Brojač nema ulaz.
-                if (l.kind == ItemKind.counter)
-                  const SizedBox(
-                    width: 100,
-                    child: Text(
-                      '–',
-                      textAlign: TextAlign.right,
-                      style: TextStyle(color: SankoColors.muted),
-                    ),
-                  )
-                else
-                  field(_received[l.itemId]!, 'primljeno-${l.itemId}'),
+                field(_received[l.itemId]!, 'primljeno-${l.itemId}'),
                 const SizedBox(width: 12),
                 field(_closing[l.itemId]!, 'ostatak-${l.itemId}'),
                 SizedBox(width: 90, child: consumedText(l, consumed)),
@@ -1966,11 +1954,12 @@ class _ObracunCardsState extends State<_ObracunCards> {
   String _detail(ObracunLine l) {
     final sold = l.consumed == null
         ? ''
-        : ' · ${l.kind == ItemKind.counter ? '' : 'utrošeno '}'
+        : ' · ${l.kind == ItemKind.counter ? 'porcija' : 'utrošeno'} '
               '${l.consumed} × ${fmtMoney(l.price)}';
     if (l.kind == ItemKind.counter) {
-      final end = l.closing == null ? '' : ' → ${l.closing}';
-      return 'brojač ${l.opening}$end$sold';
+      final received = l.received == 0 ? '' : ' + ${fmtGrams(l.received)}';
+      final end = l.closing == null ? '' : ' → ${fmtGrams(l.closing!)}';
+      return '${fmtGrams(l.opening)}$received$end$sold';
     }
     final received = l.received == 0 ? '' : ' + ${l.received}';
     final end = l.closing == null ? '' : ' → ${l.closing}';

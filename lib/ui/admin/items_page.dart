@@ -80,8 +80,9 @@ class ItemsPage extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       [
-                        if (item.kind == ItemKind.counter) 'brojač',
-                        'početno ${item.initialQty}',
+                        if (item.kind == ItemKind.counter)
+                          '${item.portion} g po porciji',
+                        'početno ${item.initialQty}${item.kind == ItemKind.counter ? ' g' : ''}',
                         if (item.minQty != null) 'min ${item.minQty}',
                       ].join(' · '),
                       style: muted.copyWith(fontSize: 13),
@@ -134,7 +135,7 @@ class ItemsPage extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 12),
-                Tag(item.kind == ItemKind.counter ? 'Brojač' : 'Zaliha'),
+                Tag(item.kind == ItemKind.counter ? 'Grami' : 'Zaliha'),
                 if (item.minQty != null) ...[
                   const SizedBox(width: 8),
                   Tag('min ${item.minQty}'),
@@ -339,6 +340,11 @@ class _ItemDialogState extends State<_ItemDialog> {
   );
   late final _min = TextEditingController(text: '${widget.item?.minQty ?? ''}');
   late final _par = TextEditingController(text: '${widget.item?.parQty ?? ''}');
+  late final _portion = TextEditingController(
+    text: widget.item?.kind == ItemKind.counter
+        ? '${widget.item!.portion}'
+        : '',
+  );
   late ItemKind _kind = widget.item?.kind ?? ItemKind.stock;
   late String? _imageId = widget.item?.imageId;
 
@@ -360,6 +366,7 @@ class _ItemDialogState extends State<_ItemDialog> {
     _qty.dispose();
     _min.dispose();
     _par.dispose();
+    _portion.dispose();
     super.dispose();
   }
 
@@ -374,8 +381,13 @@ class _ItemDialogState extends State<_ItemDialog> {
       showError(context, 'Početno stanje mora biti cijeli broj.');
       return;
     }
-    // Brojač nije zaliha i ne naručuje se.
+    // Kafa i slično se vodi u gramima i ne naručuje se kroz minimum.
     final counter = _kind == ItemKind.counter;
+    final portion = counter ? int.tryParse(_portion.text.trim()) : 1;
+    if (portion == null || portion <= 0) {
+      showError(context, 'Unesite gramažu jedne porcije, npr. 20.');
+      return;
+    }
     final min = counter ? null : int.tryParse(_min.text.trim());
     final par = counter ? null : int.tryParse(_par.text.trim());
     if (par != null && min == null) {
@@ -402,6 +414,7 @@ class _ItemDialogState extends State<_ItemDialog> {
               imageId: _imageId,
               minQty: min,
               parQty: par,
+              portion: portion,
             )
           : data.updateItem(
               Item(
@@ -413,6 +426,7 @@ class _ItemDialogState extends State<_ItemDialog> {
                 imageId: _imageId,
                 minQty: min,
                 parQty: par,
+                portion: portion,
               ),
             ),
     );
@@ -450,7 +464,7 @@ class _ItemDialogState extends State<_ItemDialog> {
                 ),
                 ButtonSegment(
                   value: ItemKind.counter,
-                  label: Text(isCompact(context) ? 'Brojač' : 'Brojač aparata'),
+                  label: Text(isCompact(context) ? 'Grami' : 'Grami (kafa)'),
                 ),
               ],
               selected: {_kind},
@@ -477,7 +491,7 @@ class _ItemDialogState extends State<_ItemDialog> {
               inputFormatters: [FilteringTextInputFormatter.digitsOnly],
               decoration: InputDecoration(
                 labelText: counter
-                    ? 'Početno stanje brojača'
+                    ? 'Početno stanje (grama)'
                     : 'Početno stanje (komada)',
                 helperMaxLines: 3,
                 helperText: widget.hasHistory
@@ -485,6 +499,21 @@ class _ItemDialogState extends State<_ItemDialog> {
                     : null,
               ),
             ),
+            if (counter) ...[
+              const SizedBox(height: 8),
+              TextField(
+                controller: _portion,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: 'Gramaža jedne porcije',
+                  suffixText: 'g',
+                  helperMaxLines: 3,
+                  helperText:
+                      'Konobar upisuje prodane porcije; svaka skida ovoliko grama sa zalihe.',
+                ),
+              ),
+            ],
             if (!counter) ...[
               const SizedBox(height: 8),
               Row(

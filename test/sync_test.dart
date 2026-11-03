@@ -95,7 +95,7 @@ void main() {
       description: 'Konzum, mlijeko',
       amount: 300,
     );
-    await count(phone, shift.id, {'KAFA': 149091, 'KOLA': 88});
+    await count(phone, shift.id, {'KAFA': 148283, 'KOLA': 88});
     await phone.repo.closeShift(
       shift.id,
       handover: const Handover(kitchen: 1500, cash: 100000, card: 6000),

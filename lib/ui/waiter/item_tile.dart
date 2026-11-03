@@ -42,13 +42,13 @@ class ItemTile extends StatelessWidget {
         fontWeight: FontWeight.w700,
         fontSize: 13,
         height: 1.15,
-        color: entered ? Colors.white : SankoColors.ink,
+        color: entered ? Colors.white : WaiterColors.text,
       ),
     );
     const check = Icon(Icons.check_circle, color: Colors.white, size: 18);
 
     return Material(
-      color: entered ? color : Colors.white,
+      color: entered ? color : WaiterColors.surface,
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
@@ -57,7 +57,7 @@ class ItemTile extends StatelessWidget {
         child: Container(
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: entered ? color : SankoColors.line),
+            border: Border.all(color: entered ? color : WaiterColors.line),
           ),
           padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
           child: Column(
@@ -105,7 +105,7 @@ class ItemTile extends StatelessWidget {
                   fontWeight: entered ? FontWeight.w800 : FontWeight.w400,
                   letterSpacing: entered ? -0.5 : 0,
                   fontFeatures: tabularFigures,
-                  color: entered ? Colors.white : SankoColors.muted,
+                  color: entered ? Colors.white : WaiterColors.muted,
                 ),
               ),
             ],

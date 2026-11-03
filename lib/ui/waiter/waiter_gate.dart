@@ -35,8 +35,10 @@ class _WaiterGateState extends State<WaiterGate> {
     return Loader<Shift?>(
       load: (repo) => repo.openShift(),
       builder: (context, shift) {
-        if (shift == null) return _StartShift(worker: widget.worker);
-        if (shift.workerId != widget.worker.id) return _Blocked(shift: shift);
+        if (shift == null) return StartShiftView(worker: widget.worker);
+        if (shift.workerId != widget.worker.id) {
+          return BlockedView(shift: shift);
+        }
         return _Home(
           shift: shift,
           onClosed: () => setState(() => _closedShiftId = shift.id),
@@ -45,6 +47,12 @@ class _WaiterGateState extends State<WaiterGate> {
     );
   }
 }
+
+/// Glavno dugme: tamnoplavo sa mesinganim tekstom.
+final _brassOnNavy = FilledButton.styleFrom(
+  backgroundColor: SankoColors.navy,
+  foregroundColor: SankoColors.brass,
+);
 
 /// Tamna ploča na vrhu ekrana, sa zaobljenim donjim rubom.
 class _DarkPanel extends StatelessWidget {
@@ -181,8 +189,8 @@ class _SyncPill extends StatelessWidget {
   }
 }
 
-class _StartShift extends StatelessWidget {
-  const _StartShift({required this.worker});
+class StartShiftView extends StatelessWidget {
+  const StartShiftView({super.key, required this.worker});
 
   final Worker worker;
 
@@ -211,14 +219,14 @@ class _StartShift extends StatelessWidget {
                     const Text(
                       'Početno stanje se preuzima iz prethodne smjene.',
                       textAlign: TextAlign.center,
-                      style: TextStyle(fontSize: 17, color: SankoColors.ink),
+                      style: TextStyle(fontSize: 17, color: WaiterColors.text),
                     ),
                     const SizedBox(height: 24),
                     _StartButton(worker: worker),
                     const SizedBox(height: 14),
                     const Text(
                       'Za početak smjene je potreban internet.',
-                      style: TextStyle(color: SankoColors.muted, fontSize: 14),
+                      style: TextStyle(color: WaiterColors.muted, fontSize: 14),
                     ),
                   ],
                 ),
@@ -263,6 +271,7 @@ class _StartButtonState extends State<_StartButton> {
       height: 62,
       width: double.infinity,
       child: FilledButton(
+        style: _brassOnNavy,
         onPressed: _busy ? null : _start,
         child: _busy
             ? const SizedBox.square(
@@ -275,8 +284,8 @@ class _StartButtonState extends State<_StartButton> {
   }
 }
 
-class _Blocked extends StatelessWidget {
-  const _Blocked({required this.shift});
+class BlockedView extends StatelessWidget {
+  const BlockedView({super.key, required this.shift});
 
   final Shift shift;
 
@@ -293,7 +302,7 @@ class _Blocked extends StatelessWidget {
               const Icon(
                 Icons.lock_clock_outlined,
                 size: 52,
-                color: SankoColors.muted,
+                color: WaiterColors.muted,
               ),
               const SizedBox(height: 16),
               Text(
@@ -308,7 +317,7 @@ class _Blocked extends StatelessWidget {
               const Text(
                 'Nova smjena može početi tek kad se prethodna zaključi.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: SankoColors.muted),
+                style: TextStyle(fontSize: 16, color: WaiterColors.muted),
               ),
             ],
           ),
@@ -459,8 +468,7 @@ class _Home extends StatelessWidget {
   }
 }
 
-/// Jedan od tri velika ulaza na početnoj: naziv lijevo, trenutno stanje desno.
-/// Velika pločica u boji jednog dijela posla, sa brojem desno.
+/// Velika pločica jednog dijela posla: naziv lijevo, trenutno stanje desno u boji dijela.
 class ModeTile extends StatelessWidget {
   const ModeTile({
     super.key,
@@ -483,79 +491,139 @@ class ModeTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = color;
     return Expanded(
       child: Material(
-        color: color,
+        type: MaterialType.transparency,
         borderRadius: BorderRadius.circular(26),
         child: InkWell(
           borderRadius: BorderRadius.circular(26),
+          splashColor: accent.withValues(alpha: 0.12),
+          highlightColor: accent.withValues(alpha: 0.06),
           onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(22, 18, 22, 18),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+          child: Ink(
+            decoration: BoxDecoration(
+              color: WaiterColors.surface,
+              borderRadius: BorderRadius.circular(26),
+              // Rub u boji dijela posla i sjena odvajaju bijelu karticu od podloge.
+              border: Border.all(
+                color: color.withValues(alpha: 0.28),
+                width: 1.5,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: SankoColors.navy.withValues(alpha: 0.10),
+                  blurRadius: 24,
+                  offset: const Offset(0, 10),
+                ),
+                BoxShadow(
+                  color: SankoColors.navy.withValues(alpha: 0.05),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
+            child: Stack(
               children: [
-                Expanded(
+                // Tanka traka u boji dijela posla, uz lijevi rub.
+                Positioned(
+                  left: 0,
+                  top: 26,
+                  bottom: 26,
+                  child: Container(
+                    width: 6,
+                    decoration: BoxDecoration(
+                      color: accent,
+                      borderRadius: const BorderRadius.horizontal(
+                        right: Radius.circular(4),
+                      ),
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 18, 22, 20),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Container(
-                        width: 44,
-                        height: 44,
-                        decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.16),
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                        child: Icon(icon, color: Colors.white, size: 24),
+                      Row(
+                        children: [
+                          Container(
+                            width: 46,
+                            height: 46,
+                            decoration: BoxDecoration(
+                              color: accent.withValues(alpha: 0.14),
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: Icon(icon, color: accent, size: 24),
+                          ),
+                          const Spacer(),
+                          const Icon(
+                            Icons.arrow_forward_ios_rounded,
+                            size: 16,
+                            color: WaiterColors.muted,
+                          ),
+                        ],
                       ),
                       const Spacer(),
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 30,
-                          height: 1.1,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 0.5,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        subtitle,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontSize: 15,
-                        ),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  title,
+                                  style: const TextStyle(
+                                    color: WaiterColors.text,
+                                    fontSize: 28,
+                                    height: 1.1,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 1,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  subtitle,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    color: WaiterColors.muted,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (value.isNotEmpty)
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  value,
+                                  style: TextStyle(
+                                    color: accent,
+                                    fontSize: 30,
+                                    height: 1.1,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: -0.5,
+                                    fontFeatures: tabularFigures,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  valueLabel,
+                                  style: const TextStyle(
+                                    color: WaiterColors.muted,
+                                    fontSize: 15,
+                                  ),
+                                ),
+                              ],
+                            ),
+                        ],
                       ),
                     ],
                   ),
-                ),
-                Column(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  crossAxisAlignment: CrossAxisAlignment.end,
-                  children: [
-                    Text(
-                      value,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 32,
-                        height: 1.1,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.5,
-                        fontFeatures: tabularFigures,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      valueLabel,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.85),
-                        fontSize: 15,
-                      ),
-                    ),
-                  ],
                 ),
               ],
             ),
@@ -699,7 +767,7 @@ class _Summary extends StatelessWidget {
                                           Text(
                                             '${l.consumed} × ${fmtMoney(l.price)}',
                                             style: const TextStyle(
-                                              color: SankoColors.muted,
+                                              color: WaiterColors.muted,
                                               fontSize: 13,
                                               fontFeatures: tabularFigures,
                                             ),
@@ -733,6 +801,7 @@ class _Summary extends StatelessWidget {
                     height: 58,
                     width: double.infinity,
                     child: FilledButton(
+                      style: _brassOnNavy,
                       onPressed: () =>
                           Navigator.popUntil(context, (r) => r.isFirst),
                       child: const Text('Odjava'),

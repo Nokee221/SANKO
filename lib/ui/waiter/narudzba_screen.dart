@@ -144,8 +144,15 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
       },
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: ModeColors.narudzba,
+          backgroundColor: SankoColors.navy,
           foregroundColor: Colors.white,
+          bottom: const PreferredSize(
+            preferredSize: Size.fromHeight(2),
+            child: ColoredBox(
+              color: SankoColors.brass,
+              child: SizedBox(height: 2, width: double.infinity),
+            ),
+          ),
           title: Text(
             pickTable ? 'Izaberite sto' : (_table?.name ?? 'Narudžba'),
             style: const TextStyle(fontWeight: FontWeight.w800),
@@ -157,7 +164,7 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
               onPressed: _load,
             ),
             TextButton.icon(
-              style: TextButton.styleFrom(foregroundColor: Colors.white),
+              style: TextButton.styleFrom(foregroundColor: SankoColors.brass),
               onPressed: _openMine,
               icon: const Icon(Icons.history),
               label: const Text('Moje'),
@@ -219,7 +226,7 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
       children: [
         for (final t in [...menu.tables, _noTable])
           Material(
-            color: t == _noTable ? SankoColors.paper : Colors.white,
+            color: t == _noTable ? WaiterColors.bg : WaiterColors.surface,
             borderRadius: BorderRadius.circular(18),
             child: InkWell(
               borderRadius: BorderRadius.circular(18),
@@ -227,7 +234,7 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
               child: Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: SankoColors.line),
+                  border: Border.all(color: WaiterColors.line),
                 ),
                 alignment: Alignment.center,
                 padding: const EdgeInsets.all(8),
@@ -237,7 +244,9 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
                   style: TextStyle(
                     fontSize: t == _noTable ? 14 : 18,
                     fontWeight: FontWeight.w800,
-                    color: t == _noTable ? SankoColors.muted : SankoColors.ink,
+                    color: t == _noTable
+                        ? WaiterColors.muted
+                        : WaiterColors.text,
                   ),
                 ),
               ),
@@ -259,6 +268,7 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Row(
               children: [
@@ -295,7 +305,8 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
                 padding: EdgeInsets.only(top: 6),
                 child: Text(
                   'Tap dodaje komad, dugi pritisak oduzima.',
-                  style: TextStyle(color: SankoColors.muted, fontSize: 13),
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: WaiterColors.muted, fontSize: 13),
                 ),
               ),
           ],
@@ -364,7 +375,7 @@ class _Message extends StatelessWidget {
             Text(
               text,
               textAlign: TextAlign.center,
-              style: const TextStyle(fontSize: 17, color: SankoColors.muted),
+              style: const TextStyle(fontSize: 17, color: WaiterColors.muted),
             ),
             if (action != null) ...[const SizedBox(height: 16), action!],
           ],
@@ -425,7 +436,7 @@ class _MojeNarudzbeScreenState extends State<MojeNarudzbeScreen> {
     final total = orders?.fold(0, (sum, o) => sum + o.total) ?? 0;
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: ModeColors.narudzba,
+        backgroundColor: SankoColors.navy,
         foregroundColor: Colors.white,
         title: const Text(
           'Moje narudžbe',
@@ -518,7 +529,7 @@ class _MyOrderCard extends StatelessWidget {
             const SizedBox(height: 6),
             Text(
               order.lines.map((l) => '${l.qty}× ${l.name}').join(', '),
-              style: const TextStyle(color: SankoColors.muted),
+              style: const TextStyle(color: WaiterColors.muted),
             ),
             const SizedBox(height: 4),
             Text(
