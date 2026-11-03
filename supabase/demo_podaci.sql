@@ -2,11 +2,17 @@
 -- obračun, izvještaj, prosjek i narudžba izgledaju sa pravom istorijom.
 -- Pokreće se u Supabase SQL Editoru, nakon svih migracija. Upišite e-mail gazde ispod.
 --
--- Pravi: tri konobara (ako lokal nema bar dva), artikle (ako ih lokal nema), minimum za
--- narudžbu (gdje nije postavljen) i po dvije zaključene smjene dnevno, sa ulazom,
--- rashodom, kuhinjom i predajom, i današnje smjene koje su već završile. Jedan konobar
--- povremeno ima manjak, drugi ponekad pogriješi u brojanju. Ponovno pokretanje ne pravi
--- duplikate. Brisanje: supabase/obrisi_demo_podatke.sql.
+-- Pravi: tri konobara (ako lokal nema bar dva) i radnika na šanku (ako ga nema), stolove
+-- (ako ih lokal nema), artikle (ako ih lokal nema), gramažu porcije kafe i nesa (gdje je
+-- još 1 g), minimum za narudžbu (gdje nije postavljen) i po dvije zaključene smjene
+-- dnevno, sa ulazom, rashodom, kuhinjom i predajom, i današnje smjene koje su već
+-- završile. Jedan konobar povremeno ima manjak, drugi ponekad pogriješi u brojanju.
+-- Ponovno pokretanje ne pravi duplikate. Brisanje: supabase/obrisi_demo_podatke.sql.
+-- Svježe narudžbe za ekran ŠANK pravi supabase/demo_narudzbe.sql.
+--
+-- Probne smjene napravljene starom verzijom ove skripte (kafa po brojaču aparata) poslije
+-- migracije 20261022000000_kafa_grami.sql daju pogrešno utrošeno: prvo ih obrišite sa
+-- obrisi_demo_podatke.sql, pa pokrenite ovu skriptu ponovo.
 
 do $$
 declare
@@ -39,6 +45,8 @@ declare
   v_card integer;
   v_diff integer;
   v_hash text;
+  v_pin text;
+  v_konobari boolean;
   v_spends text[] := array['Mlijeko', 'Led', 'Limun', 'Šećer', 'Salvete', 'Konzum, sitnice'];
 begin
   if not exists (
@@ -46,6 +54,18 @@ begin
     where table_schema = 'public' and table_name = 'shifts' and column_name = 'cash'
   ) then
     raise exception 'Prvo pokrenite migraciju 20261020000000_predaja_izvjestaji.sql.';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'workers' and column_name = 'role'
+  ) then
+    raise exception 'Prvo pokrenite migraciju 20261021000000_narudzbe.sql.';
+  end if;
+  if not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'items' and column_name = 'portion'
+  ) then
+    raise exception 'Prvo pokrenite migraciju 20261022000000_kafa_grami.sql.';
   end if;
 
   select u.id into v_owner from auth.users u where lower(u.email) = lower(v_email);
@@ -65,7 +85,8 @@ begin
     select 1 from public.shifts s
     where s.venue_id = v_venue.id and s.id::text like 'de3d0000-%'
   ) then
-    raise notice 'Probni podaci za lokal % već postoje; ništa nije promijenjeno.', v_venue.name;
+    raise notice 'Probni podaci za lokal % već postoje; ništa nije promijenjeno. Za novu verziju prvo pokrenite obrisi_demo_podatke.sql.',
+      v_venue.name;
     return;
   end if;
   if exists (
@@ -79,32 +100,60 @@ begin
   -- Ista nasumičnost svaki put, da prezentacija uvijek izgleda isto.
   perform setseed(0.42);
 
-  -- Konobari
-  if (select count(*) from public.workers w where w.venue_id = v_venue.id and w.active) < 2 then
-    for v_w in 1..3 loop
-      if not exists (
-        select 1 from public.workers w
-        where w.venue_id = v_venue.id and w.active and w.name = (array['Amra', 'Bakir', 'Dino'])[v_w]
-      ) then
-        with w as (
-          insert into public.workers (venue_id, name)
-          values (v_venue.id, (array['Amra', 'Bakir', 'Dino'])[v_w])
-          returning id
-        )
-        insert into private.worker_secrets (worker_id, pin_hash)
-        select w.id, extensions.crypt((array['7101', '7202', '7303'])[v_w], extensions.gen_salt('bf'))
-        from w;
-      end if;
-    end loop;
-  end if;
+  -- Konobari i radnik na šanku; PIN koji već koristi neko drugi se preskače.
+  v_konobari := (
+    select count(*) from public.workers w
+    where w.venue_id = v_venue.id and w.active and w.role = 'konobar'
+  ) < 2;
+  for v_w in 1..4 loop
+    continue when v_w <= 3 and not v_konobari;
+    continue when v_w = 4 and exists (
+      select 1 from public.workers w where w.venue_id = v_venue.id and w.active and w.role = 'sank'
+    );
+    continue when exists (
+      select 1 from public.workers w
+      where w.venue_id = v_venue.id and w.active and w.name = (array['Amra', 'Bakir', 'Dino', 'Lejla'])[v_w]
+    );
+    v_pin := (array['7101', '7202', '7303', '7404'])[v_w];
+    if exists (
+      select 1 from public.workers w
+      join private.worker_secrets s on s.worker_id = w.id
+      where w.venue_id = v_venue.id and w.active and s.pin_hash = extensions.crypt(v_pin, s.pin_hash)
+    ) then
+      raise notice 'PIN % već koristi drugi radnik; % nije dodan.', v_pin, (array['Amra', 'Bakir', 'Dino', 'Lejla'])[v_w];
+      continue;
+    end if;
+    with w as (
+      insert into public.workers (venue_id, name, role)
+      values (v_venue.id, (array['Amra', 'Bakir', 'Dino', 'Lejla'])[v_w],
+        case when v_w = 4 then 'sank' else 'konobar' end)
+      returning id
+    )
+    insert into private.worker_secrets (worker_id, pin_hash)
+    select w.id, extensions.crypt(v_pin, extensions.gen_salt('bf'))
+    from w;
+  end loop;
   select array_agg(w.id order by w.created_at), array_agg(w.name order by w.created_at)
   into v_workers, v_names
   from (
     select * from public.workers w
-    where w.venue_id = v_venue.id and w.active
+    where w.venue_id = v_venue.id and w.active and w.role = 'konobar'
     order by w.created_at
     limit 3
   ) w;
+  if v_workers is null then
+    raise exception 'Lokal % nema nijednog konobara.', v_venue.name;
+  end if;
+
+  -- Stolovi, ako ih lokal nema
+  if not exists (select 1 from public.venue_tables t where t.venue_id = v_venue.id and t.active) then
+    insert into public.venue_tables (venue_id, name, sort_order)
+    select v_venue.id, t.name, t.ord
+    from unnest(array[
+      'Sto 1', 'Sto 2', 'Sto 3', 'Sto 4', 'Sto 5', 'Sto 6', 'Sto 7', 'Sto 8',
+      'Terasa 1', 'Terasa 2', 'Terasa 3', 'Terasa 4', 'Šank'
+    ]) with ordinality as t (name, ord);
+  end if;
 
   -- Artikli, ako lokal još nema nijedan
   if not exists (select 1 from public.items i where i.venue_id = v_venue.id and i.active) then
@@ -112,7 +161,7 @@ begin
     select v_venue.id, d.name, d.kind::public.item_kind, d.price, d.qty,
       (select c.id from public.catalog_images c where c.name = d.name)
     from (values
-      (1, 'KAFA', 'counter', 250, 148687), (2, 'NES APARAT', 'counter', 350, 68779),
+      (1, 'KAFA', 'counter', 250, 145000), (2, 'NES APARAT', 'counter', 350, 50000),
       (3, 'KAPUCINO', 'stock', 350, 40), (4, 'ČAJ', 'stock', 300, 214),
       (5, 'TOPLA ČOKOLADA', 'stock', 450, 30), (6, 'JAGODA', 'stock', 350, 41),
       (7, 'JABUKA', 'stock', 350, 57), (8, 'BRESKVA', 'stock', 350, 59),
@@ -130,9 +179,14 @@ begin
     order by d.ord;
   end if;
 
-  -- Koliko se artikla proda u prosječnoj smjeni, po nazivu; brojač kafe broji šoljice.
+  -- Kafa i nes se vode u gramima; porcija kao u probnim artiklima aplikacije.
+  update public.items i
+  set portion = case when upper(i.name) like '%KAF%' then 20 else 15 end
+  where i.venue_id = v_venue.id and i.active and i.kind = 'counter' and i.portion = 1;
+
+  -- Koliko porcija artikla se proda u prosječnoj smjeni, po nazivu.
   create temp table demo_items on commit drop as
-  select i.id, i.name, i.kind, i.price, i.sort_order,
+  select i.id, i.name, i.kind, i.price, i.sort_order, i.portion,
     case
       when i.kind = 'counter' and upper(i.name) like '%KAF%' then 110
       when i.kind = 'counter' then 25
@@ -198,9 +252,13 @@ begin
       for v_item in select * from demo_items order by sort_order, name loop
         v_open := v_item.stock;
         v_received := 0;
-        -- Roba stiže ujutro, kad zaliha padne ispod tri smjene prodaje.
-        if v_item.kind = 'stock' and v_slot = 1 and v_open < greatest(6, v_item.rate * 3) then
+        -- Roba stiže ujutro, kad zaliha padne ispod tri smjene prodaje; kafa u kilogramima.
+        if v_slot = 1 and v_item.kind = 'stock' and v_open < greatest(6, v_item.rate * 3) then
           v_received := greatest(12, ceil(v_item.rate * 9.0 / 6) * 6)::integer;
+        elsif v_slot = 1 and v_item.kind = 'counter' and v_open < v_item.rate * 3 * v_item.portion then
+          v_received := (ceil(v_item.rate * 9.0 * v_item.portion / 1000) * 1000)::integer;
+        end if;
+        if v_received > 0 then
           if v_receipt is null then
             v_receipt := gen_random_uuid();
             insert into public.receipts (id, shift_id, venue_id, created_at, closed_at)
@@ -230,7 +288,9 @@ begin
             v_closing := v_open + v_received - v_used;
           end if;
         else
-          v_closing := v_open + v_used;
+          -- Prodane porcije skidaju svoju gramažu sa zalihe.
+          v_used := least(v_used, (v_open + v_received) / v_item.portion);
+          v_closing := v_open + v_received - v_used * v_item.portion;
         end if;
         insert into public.shift_lines
           (shift_id, item_id, venue_id, item_name, kind, price, sort_order, opening_qty, closing_qty)
