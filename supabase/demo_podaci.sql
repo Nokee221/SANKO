@@ -7,7 +7,8 @@
 -- još 1 g), minimum za narudžbu (gdje nije postavljen) i po dvije zaključene smjene
 -- dnevno, sa ulazom, rashodom, kuhinjom i predajom, i današnje smjene koje su već
 -- završile. Jedan konobar povremeno ima manjak, drugi ponekad pogriješi u brojanju.
--- Ponovno pokretanje ne pravi duplikate. Brisanje: supabase/obrisi_demo_podatke.sql.
+-- Ponovno pokretanje dopunjava dane od zadnje smjene do danas (npr. jučerašnji obračun),
+-- bez duplikata. Brisanje: supabase/obrisi_demo_podatke.sql.
 -- Svježe narudžbe za ekran ŠANK pravi supabase/demo_narudzbe.sql.
 --
 -- Probne smjene napravljene starom verzijom ove skripte (kafa po brojaču aparata) poslije
@@ -47,6 +48,8 @@ declare
   v_hash text;
   v_pin text;
   v_konobari boolean;
+  v_last_opened timestamptz;
+  v_count integer := 0;
   v_spends text[] := array['Mlijeko', 'Led', 'Limun', 'Šećer', 'Salvete', 'Konzum, sitnice'];
 begin
   if not exists (
@@ -85,11 +88,17 @@ begin
     select 1 from public.shifts s
     where s.venue_id = v_venue.id and s.id::text like 'de3d0000-%'
   ) then
-    raise notice 'Probni podaci za lokal % već postoje; ništa nije promijenjeno. Za novu verziju prvo pokrenite obrisi_demo_podatke.sql.',
-      v_venue.name;
-    return;
-  end if;
-  if exists (
+    -- Dopuna: samo smjene poslije zadnje postojeće, da se zalihe nastave redom.
+    if exists (select 1 from public.shifts s where s.venue_id = v_venue.id and s.closed_at is null) then
+      raise notice 'Lokal % ima otvorenu smjenu (%); zaključite je pa pokrenite skriptu ponovo.',
+        v_venue.name,
+        (select s.worker_name from public.shifts s where s.venue_id = v_venue.id and s.closed_at is null);
+      return;
+    end if;
+    select max(s.business_date), max(s.opened_at) into v_from, v_last_opened
+    from public.shifts s
+    where s.venue_id = v_venue.id;
+  elsif exists (
     select 1 from public.shifts s
     where s.venue_id = v_venue.id and s.business_date >= v_from and s.business_date < current_date
   ) then
@@ -217,18 +226,19 @@ begin
   where i.id = d.id and i.kind = 'stock' and i.min_qty is null;
 
   -- Danas samo smjene koje su već trebale završiti, i samo ako danas nema pravih smjena.
-  for d in 0..v_days loop
+  for d in 0..(current_date - v_from) loop
     v_date := v_from + d;
     exit when v_date = current_date and exists (
       select 1 from public.shifts s
       where s.venue_id = v_venue.id and s.business_date = current_date
+        and s.id::text not like 'de3d0000-%'
     );
     v_dow := extract(isodow from v_date);
     v_busy := case when v_dow in (5, 6) then 1.45 when v_dow = 7 then 1.15 when v_dow = 1 then 0.85 else 1 end;
 
     for v_slot in 1..2 loop
       -- Smjene se rotiraju među konobarima.
-      v_w := 1 + (d * 2 + v_slot - 1) % coalesce(array_length(v_workers, 1), 1);
+      v_w := 1 + ((v_date - date '2000-01-01') * 2 + v_slot - 1) % coalesce(array_length(v_workers, 1), 1);
       v_shift := (
         'de3d0000-' || substr(md5(v_venue.id::text || v_date || v_slot), 1, 4) || '-4' ||
         substr(md5(v_venue.id::text || v_date || v_slot), 5, 3) || '-8' ||
@@ -240,12 +250,18 @@ begin
       v_closed := ((v_date + case v_slot when 1 then time '15:00' else time '23:00' end)
         at time zone v_venue.timezone) + make_interval(mins => floor(random() * 15)::integer);
       exit when v_closed > now();
+      continue when v_opened <= v_last_opened
+        or exists (select 1 from public.shifts s where s.id = v_shift);
 
       -- Smjena se upisuje odmah zaključena, pa ne šalje obavještenje na Telegram.
       insert into public.shifts
         (id, venue_id, worker_id, worker_name, business_date, seq, opened_at, closed_at, updated_at)
       values
-        (v_shift, v_venue.id, v_workers[v_w], v_names[v_w], v_date, v_slot, v_opened, v_closed, v_closed);
+        (v_shift, v_venue.id, v_workers[v_w], v_names[v_w], v_date,
+         (select coalesce(max(s.seq), 0) + 1 from public.shifts s
+          where s.venue_id = v_venue.id and s.business_date = v_date),
+         v_opened, v_closed, v_closed);
+      v_count := v_count + 1;
       v_receipt := null;
       v_sank := 0;
 
@@ -329,9 +345,7 @@ begin
     end loop;
   end loop;
 
-  raise notice 'Lokal %: % probnih smjena od %, konobari: %.',
-    v_venue.name,
-    (select count(*) from public.shifts s where s.venue_id = v_venue.id and s.id::text like 'de3d0000-%'),
-    v_from, array_to_string(v_names, ', ');
+  raise notice 'Lokal %: % novih probnih smjena od %, konobari: %.',
+    v_venue.name, v_count, v_from, array_to_string(v_names, ', ');
 end;
 $$;
