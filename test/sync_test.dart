@@ -421,4 +421,82 @@ void main() {
       expect(await phone.sync.refresh(), contains('Nema interneta'));
     },
   );
+
+  test(
+    'smjenu koju gazda zaključi, drugi radnik na istom telefonu može zamijeniti',
+    () async {
+      final phone = await newPhone();
+      final shift = await phone.sync.startShift(await phone.sync.login('1111'));
+      final lines = (await phone.repo.obracunForShift(shift.id)).lines;
+      await phone.sync.pushNow();
+
+      // Dok je Amrina smjena otvorena i na serveru, Bakir čeka.
+      await phone.sync.login('2222');
+      await phone.sync.pendingRefresh;
+      expect((await phone.repo.openShift())?.id, shift.id);
+      expect(await phone.sync.refresh(), 'Smjenu još nije zaključio/la Amra.');
+
+      // Gazda zaključuje Amrinu smjenu s desktopa.
+      await server.adminCloseShift(shift.id, {
+        for (final l in lines) l.itemId: l.name == 'KAFA' ? 148700 : 70,
+      });
+
+      expect(await phone.sync.refresh(), isNull);
+      expect(await phone.repo.openShift(), isNull);
+      final bakir = (await phone.repo.workerByPin('2222'))!;
+      final next = await phone.sync.startShift(bakir);
+      expect(next.seq, 2);
+      expect(next.workerId, bakir.id);
+      expect((await phone.repo.openShift())?.id, next.id);
+    },
+  );
+
+  test(
+    'tuđa smjena sa neposlanim unosima ostaje dok se njen radnik ne prijavi',
+    () async {
+      final phone = await newPhone();
+      final shift = await phone.sync.startShift(await phone.sync.login('1111'));
+      final lines = (await phone.repo.obracunForShift(shift.id)).lines;
+      phone.backend.offline = true;
+      await phone.repo.addExpense(shift.id, description: 'Limun', amount: 500);
+
+      await server.adminCloseShift(shift.id, {
+        for (final l in lines) l.itemId: l.name == 'KAFA' ? 148700 : 70,
+      });
+
+      phone.backend.offline = false;
+      await phone.sync.login('2222');
+      await phone.sync.pendingRefresh;
+      expect((await phone.repo.openShift())?.id, shift.id);
+      expect(await phone.sync.refresh(), contains('Neka se Amra prijavi'));
+      expect(await phone.repo.shiftHasUnsent(shift.id), isTrue);
+
+      // Amra se prijavi; telefon preuzme smjenu kako ju je gazda zaključio.
+      await phone.sync.login('1111');
+      await phone.sync.pendingRefresh;
+      // Prijava šalje unose u pozadini; sačekaj da slanje završi.
+      await Future.doWhile(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        return phone.sync.hasUnsent;
+      });
+      expect(await phone.repo.openShift(), isNull);
+      expect(await phone.repo.hasUnsent(), isFalse);
+    },
+  );
+
+  test('tuđa smjena koje nema na serveru ne blokira telefon', () async {
+    final phone = await newPhone();
+    final shift = await phone.sync.startShift(await phone.sync.login('1111'));
+    // Gazda je obrisao probne podatke.
+    await serverDb.delete(
+      'shift_lines',
+      where: 'shift_id = ?',
+      whereArgs: [shift.id],
+    );
+    await serverDb.delete('shifts', where: 'id = ?', whereArgs: [shift.id]);
+
+    await phone.sync.login('2222');
+    await phone.sync.pendingRefresh;
+    expect(await phone.repo.openShift(), isNull);
+  });
 }

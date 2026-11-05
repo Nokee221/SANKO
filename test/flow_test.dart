@@ -431,4 +431,73 @@ void main() {
     expect(find.text('Amra'), findsOneWidget);
     await _shot('13_admin_radnici');
   });
+
+  testWidgets(
+    'Amra ode bez zaključenja; gazda zaključi, Bakir na istom telefonu počinje',
+    (tester) async {
+      late Database serverDb;
+      late Database phoneDb;
+      late Repository server;
+      late Repository phone;
+      late WaiterSync sync;
+      late Shift shift;
+      await tester.runAsync(() async {
+        serverDb = await openTestDb(isolate: false);
+        server = Repository(serverDb);
+        await server.addWorker(name: 'Amra', pin: '1111');
+        await server.addWorker(name: 'Bakir', pin: '2222');
+        await server.seedDemoItems();
+
+        phoneDb = await openTestDb(isolate: false);
+        phone = Repository(phoneDb);
+        sync = WaiterSync(
+          phone,
+          FakeBackend(server, serverDb),
+          autoSync: false,
+        );
+        await sync.init();
+        await sync.setVenueCode(testVenueCode);
+        shift = await sync.startShift(await sync.login('1111'));
+      });
+      addTearDown(() async {
+        await phoneDb.close();
+        await serverDb.close();
+      });
+      addTearDown(tester.view.reset);
+      tester.view.devicePixelRatio = 2;
+      tester.view.physicalSize = const Size(390, 844) * 2;
+
+      Future<void> tapText(String text) async {
+        await tester.tap(find.text(text).last);
+        await tester.pumpAndSettle();
+      }
+
+      await tester.pumpWidget(WaiterApp(repo: phone, sync: sync));
+      await tester.pumpAndSettle();
+      for (final d in '2222'.split('')) {
+        await tapText(d);
+      }
+      await tester.runAsync(() => sync.pendingRefresh);
+      await tester.pumpAndSettle();
+      expect(find.text('Smjenu još nije zaključio/la Amra'), findsOneWidget);
+
+      // Server i dalje vidi Amrinu smjenu otvorenom.
+      await tapText('Osvježi');
+      expect(find.text('Smjenu još nije zaključio/la Amra.'), findsOneWidget);
+
+      await tester.runAsync(() async {
+        final o = await server.obracunForShift(shift.id);
+        await server.adminCloseShift(shift.id, {
+          for (final l in o.lines) l.itemId: l.opening,
+        });
+      });
+      await tapText('Osvježi');
+      expect(find.text('Započni smjenu'), findsOneWidget);
+      await tapText('Započni smjenu');
+      expect(find.text('NARUDŽBA'), findsOneWidget);
+      final next = (await tester.runAsync(phone.openShift))!;
+      expect(next.workerName, 'Bakir');
+      expect(next.seq, 2);
+    },
+  );
 }

@@ -284,42 +284,86 @@ class _StartButtonState extends State<_StartButton> {
   }
 }
 
-class BlockedView extends StatelessWidget {
+/// Na telefonu je otvorena smjena drugog radnika. Ako je gazda zaključi s desktopa,
+/// osvježavanje to sazna sa servera i ekran prelazi na početak nove smjene.
+class BlockedView extends StatefulWidget {
   const BlockedView({super.key, required this.shift});
 
   final Shift shift;
 
   @override
+  State<BlockedView> createState() => _BlockedViewState();
+}
+
+class _BlockedViewState extends State<BlockedView> {
+  bool _busy = false;
+
+  Future<void> _refresh() async {
+    final sync = SyncScope.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    setState(() => _busy = true);
+    final message = await sync.refresh();
+    if (!mounted) return;
+    setState(() => _busy = false);
+    if (message == null) return;
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final name = widget.shift.workerName;
     return Scaffold(
       appBar: AppBar(),
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(
-                Icons.lock_clock_outlined,
-                size: 52,
-                color: WaiterColors.muted,
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Smjenu još nije zaključio/la ${shift.workerName}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
+          child: Loader<bool>(
+            load: (repo) => repo.shiftHasUnsent(widget.shift.id),
+            builder: (context, unsent) => Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.lock_clock_outlined,
+                  size: 52,
+                  color: WaiterColors.muted,
                 ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                'Nova smjena može početi tek kad se prethodna zaključi.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16, color: WaiterColors.muted),
-              ),
-            ],
+                const SizedBox(height: 16),
+                Text(
+                  'Smjenu još nije zaključio/la $name',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  unsent
+                      ? 'Na ovom telefonu su neposlani unosi te smjene. '
+                            'Neka se $name prvo prijavi da se pošalju.'
+                      : 'Nova smjena može početi tek kad se prethodna zaključi. '
+                            'Ako ju je gazda već zaključio, osvježite.',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: WaiterColors.muted,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                OutlinedButton.icon(
+                  onPressed: _busy ? null : _refresh,
+                  icon: _busy
+                      ? const SizedBox.square(
+                          dimension: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.refresh),
+                  label: const Text('Osvježi'),
+                ),
+              ],
+            ),
           ),
         ),
       ),

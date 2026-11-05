@@ -79,6 +79,20 @@ class FakeBackend implements WaiterBackend {
   }
 
   @override
+  Future<DateTime?> shiftClosedAt(String shiftId) async {
+    _requireNetwork();
+    final rows = await db.query(
+      'shifts',
+      columns: ['closed_at'],
+      where: 'id = ?',
+      whereArgs: [shiftId],
+    );
+    if (rows.isEmpty) return DateTime.now();
+    final ms = rows.single['closed_at'] as int?;
+    return ms == null ? null : DateTime.fromMillisecondsSinceEpoch(ms);
+  }
+
+  @override
   Future<List<CatalogImage>> fetchImages(List<String> ids) async {
     _requireNetwork();
     return [

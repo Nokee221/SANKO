@@ -202,14 +202,17 @@ class WaiterSync extends ChangeNotifier {
   /// Šalje neposlane unose i preuzima otvorenu smjenu sa servera: artikle koje je gazda
   /// dodao, ispravljena početna stanja i slike. Lokalni unosi ostaju netaknuti.
   /// Sa [images] ponovo preuzima i sve slike, ne samo one koje nedostaju.
-  /// Vraća poruku za korisnika kad osvježavanje nije uspjelo, inače null.
+  /// Ako je na telefonu ostala otvorena smjena drugog radnika, provjerava je li je gazda
+  /// u međuvremenu zaključio. Vraća poruku za korisnika kad osvježavanje nije uspjelo
+  /// ili tuđa smjena i dalje blokira, inače null.
   Future<String?> refresh({bool images = false}) async {
     final workerId = _sessionWorkerId;
     if (workerId == null) return null;
     await pushNow();
     try {
       final open = await _repo.openShift();
-      if (open == null || open.workerId != workerId) return null;
+      if (open == null) return null;
+      if (open.workerId != workerId) return await _releaseForeign(open);
       await _repo.importShift(await _backend.fetchShift(open.id));
       await _syncImages(refresh: images);
       return null;
@@ -218,6 +221,21 @@ class WaiterSync extends ChangeNotifier {
     } on SankoException catch (e) {
       return e.message;
     }
+  }
+
+  /// Tuđu smjenu koju je gazda zaključio na serveru i telefon vodi kao zaključenu.
+  /// Neposlani unosi te smjene šalju se samo pod prijavom njenog radnika, pa dok ih ima
+  /// smjena ostaje otvorena, da se ne izgube.
+  Future<String?> _releaseForeign(Shift open) async {
+    if (await _repo.shiftHasUnsent(open.id)) {
+      return 'Na telefonu su neposlani unosi. Neka se ${open.workerName} prijavi da se pošalju.';
+    }
+    final closedAt = await _backend.shiftClosedAt(open.id);
+    if (closedAt == null ||
+        !await _repo.markClosedOnServer(open.id, closedAt)) {
+      return 'Smjenu još nije zaključio/la ${open.workerName}.';
+    }
+    return null;
   }
 
   void _schedulePush() {

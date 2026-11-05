@@ -1389,4 +1389,26 @@ class Repository extends ChangeNotifier implements AdminData {
     final rows = await _db.query('shifts', where: 'dirty > 0', limit: 1);
     return rows.isNotEmpty;
   }
+
+  Future<bool> shiftHasUnsent(String shiftId) async {
+    final rows = await _db.query(
+      'shifts',
+      where: 'id = ? AND dirty > 0',
+      whereArgs: [shiftId],
+    );
+    return rows.isNotEmpty;
+  }
+
+  /// Smjenu drugog radnika koju je gazda zaključio na serveru označava zaključenom i
+  /// na telefonu, ali samo dok za nju nema neposlanih unosa. Vraća true ako je označena.
+  Future<bool> markClosedOnServer(String shiftId, DateTime closedAt) async {
+    final updated = await _db.update(
+      'shifts',
+      {'closed_at': closedAt.millisecondsSinceEpoch},
+      where: 'id = ? AND closed_at IS NULL AND dirty = 0',
+      whereArgs: [shiftId],
+    );
+    if (updated > 0) notifyListeners();
+    return updated > 0;
+  }
 }

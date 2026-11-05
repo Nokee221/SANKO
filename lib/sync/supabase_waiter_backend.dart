@@ -76,6 +76,17 @@ class SupabaseWaiterBackend implements WaiterBackend {
   });
 
   @override
+  Future<DateTime?> shiftClosedAt(String shiftId) => supabaseCall(() async {
+    final status = await _client.rpc(
+      'shift_status',
+      params: {'p_token': await _repo.meta(_tokenKey), 'p_shift_id': shiftId},
+    );
+    if (status == null) return DateTime.now();
+    final closedAt = (status as Map<String, dynamic>)['closed_at'];
+    return closedAt == null ? null : DateTime.parse(closedAt as String);
+  });
+
+  @override
   Future<List<CatalogImage>> fetchImages(List<String> ids) =>
       supabaseCall(() async {
         final rows = await _client.rpc(

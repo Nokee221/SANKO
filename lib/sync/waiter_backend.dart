@@ -37,6 +37,10 @@ abstract interface class WaiterBackend {
 
   Future<RemoteShift> fetchShift(String shiftId);
 
+  /// Kad je zaključena smjena bilo kojeg radnika istog lokala; null dok je otvorena.
+  /// Smjena koje na serveru nema (npr. obrisani probni podaci) vraća se kao zaključena sada.
+  Future<DateTime?> shiftClosedAt(String shiftId);
+
   /// Slike iz kataloga po oznakama.
   Future<List<CatalogImage>> fetchImages(List<String> ids);
 
