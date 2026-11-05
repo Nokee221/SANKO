@@ -1,4 +1,5 @@
--- Probni podaci za prezentaciju: 60 dana smjena za lokal jednog gazde, da se vidi kako
+-- Probni podaci za prezentaciju: smjene za zadnjih v_days dana (60, ili npr. 7) za lokal
+-- jednog gazde, da se vidi kako
 -- obračun, izvještaj, prosjek i narudžba izgledaju sa pravom istorijom.
 -- Pokreće se u Supabase SQL Editoru, nakon svih migracija. Upišite e-mail gazde ispod.
 --
@@ -7,8 +8,9 @@
 -- još 1 g), minimum za narudžbu (gdje nije postavljen) i po dvije zaključene smjene
 -- dnevno, sa ulazom, rashodom, kuhinjom i predajom, i današnje smjene koje su već
 -- završile. Jedan konobar povremeno ima manjak, drugi ponekad pogriješi u brojanju.
--- Ponovno pokretanje dopunjava dane od zadnje smjene do danas (npr. jučerašnji obračun),
--- bez duplikata. Brisanje: supabase/obrisi_demo_podatke.sql.
+-- Dani koji već imaju prave smjene se preskaču, kao i dani od otvorene smjene nadalje.
+-- Ponovno pokretanje dopunjava samo dane koji fale (npr. jučerašnji obračun), bez
+-- duplikata. Brisanje: supabase/obrisi_demo_podatke.sql.
 -- Svježe narudžbe za ekran ŠANK pravi supabase/demo_narudzbe.sql.
 --
 -- Probne smjene napravljene starom verzijom ove skripte (kafa po brojaču aparata) poslije
@@ -18,7 +20,7 @@
 do $$
 declare
   v_email constant text := 'gazda@gmail.com';
-  v_days constant integer := 60;
+  v_days constant integer := 60;  -- koliko dana unazad, do danas
 
   v_owner uuid;
   v_venue public.venues;
@@ -48,7 +50,7 @@ declare
   v_hash text;
   v_pin text;
   v_konobari boolean;
-  v_last_opened timestamptz;
+  v_stop date;
   v_count integer := 0;
   v_spends text[] := array['Mlijeko', 'Led', 'Limun', 'Šećer', 'Salvete', 'Konzum, sitnice'];
 begin
@@ -84,27 +86,10 @@ begin
   if v_venue.id is null then
     raise exception 'Nalog % nije gazda nijednog lokala.', v_email;
   end if;
-  if exists (
-    select 1 from public.shifts s
-    where s.venue_id = v_venue.id and s.id::text like 'de3d0000-%'
-  ) then
-    -- Dopuna: samo smjene poslije zadnje postojeće, da se zalihe nastave redom.
-    if exists (select 1 from public.shifts s where s.venue_id = v_venue.id and s.closed_at is null) then
-      raise notice 'Lokal % ima otvorenu smjenu (%); zaključite je pa pokrenite skriptu ponovo.',
-        v_venue.name,
-        (select s.worker_name from public.shifts s where s.venue_id = v_venue.id and s.closed_at is null);
-      return;
-    end if;
-    select max(s.business_date), max(s.opened_at) into v_from, v_last_opened
-    from public.shifts s
-    where s.venue_id = v_venue.id;
-  elsif exists (
-    select 1 from public.shifts s
-    where s.venue_id = v_venue.id and s.business_date >= v_from and s.business_date < current_date
-  ) then
-    raise exception 'Lokal % već ima smjene u zadnjih % dana; probni podaci bi se pomiješali sa pravim.',
-      v_venue.name, v_days;
-  end if;
+  -- Otvorena smjena (npr. sa snimanja): od njenog dana nadalje se ništa ne dodaje.
+  select min(s.business_date) into v_stop
+  from public.shifts s
+  where s.venue_id = v_venue.id and s.closed_at is null;
 
   -- Ista nasumičnost svaki put, da prezentacija uvijek izgleda isto.
   perform setseed(0.42);
@@ -195,7 +180,7 @@ begin
 
   -- Koliko porcija artikla se proda u prosječnoj smjeni, po nazivu.
   create temp table demo_items on commit drop as
-  select i.id, i.name, i.kind, i.price, i.sort_order, i.portion,
+  select i.id, i.name, i.kind, i.price, i.sort_order, i.portion, i.initial_qty,
     case
       when i.kind = 'counter' and upper(i.name) like '%KAF%' then 110
       when i.kind = 'counter' then 25
@@ -225,12 +210,13 @@ begin
   from demo_items d
   where i.id = d.id and i.kind = 'stock' and i.min_qty is null;
 
-  -- Danas samo smjene koje su već trebale završiti, i samo ako danas nema pravih smjena.
-  for d in 0..(current_date - v_from) loop
+  -- Danas samo smjene koje su već trebale završiti; dan sa pravim smjenama ostaje kakav je.
+  for d in 0..v_days loop
     v_date := v_from + d;
-    exit when v_date = current_date and exists (
+    exit when v_date >= v_stop;
+    continue when exists (
       select 1 from public.shifts s
-      where s.venue_id = v_venue.id and s.business_date = current_date
+      where s.venue_id = v_venue.id and s.business_date = v_date
         and s.id::text not like 'de3d0000-%'
     );
     v_dow := extract(isodow from v_date);
@@ -250,8 +236,15 @@ begin
       v_closed := ((v_date + case v_slot when 1 then time '15:00' else time '23:00' end)
         at time zone v_venue.timezone) + make_interval(mins => floor(random() * 15)::integer);
       exit when v_closed > now();
-      continue when v_opened <= v_last_opened
-        or exists (select 1 from public.shifts s where s.id = v_shift);
+      continue when exists (select 1 from public.shifts s where s.id = v_shift);
+
+      -- Početno stanje kao u aplikaciji: kraj zadnje zaključene smjene prije ove.
+      update demo_items d
+      set stock = coalesce(
+        (select l.closing_qty from public.shift_lines l join public.shifts s on s.id = l.shift_id
+         where l.item_id = d.id and s.closed_at is not null and s.opened_at < v_opened
+         order by s.opened_at desc limit 1),
+        d.initial_qty);
 
       -- Smjena se upisuje odmah zaključena, pa ne šalje obavještenje na Telegram.
       insert into public.shifts
