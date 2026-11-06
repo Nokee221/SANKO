@@ -140,6 +140,47 @@ class WaiterHeader extends StatelessWidget {
             ),
           ),
           ...children,
+          if (SyncScope.of(context).notice case final notice?) ...[
+            const SizedBox(height: 14),
+            _Notice(text: notice),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// Poruka o smjeni koju je server riješio drugačije nego telefon; stoji dok se ne skloni.
+class _Notice extends StatelessWidget {
+  const _Notice({required this.text});
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 10, 4, 10),
+      decoration: BoxDecoration(
+        color: SankoColors.waiting.withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: SankoColors.waiting),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.info_outline, color: SankoColors.waiting),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(color: Colors.white, fontSize: 14),
+            ),
+          ),
+          IconButton(
+            tooltip: 'U redu',
+            icon: const Icon(Icons.close),
+            color: Colors.white70,
+            onPressed: () => SyncScope.of(context).dismissNotice(),
+          ),
         ],
       ),
     );

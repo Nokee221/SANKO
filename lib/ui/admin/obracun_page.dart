@@ -463,8 +463,8 @@ class _CloseShiftDialogState extends State<_CloseShiftDialog> {
     final counts = <String, int>{};
     for (final l in widget.lines) {
       final value = int.tryParse(_fields[l.itemId]!.text.trim());
-      if (value == null) {
-        showError(context, 'Unesite stanje za ${l.name}.');
+      if (value == null || value < 0) {
+        showError(context, 'Unesite stanje za ${l.name} (0 ili više).');
         return;
       }
       counts[l.itemId] = value;

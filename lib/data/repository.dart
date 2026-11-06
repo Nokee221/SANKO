@@ -529,6 +529,7 @@ class Repository extends ChangeNotifier implements AdminData {
           shiftId: r['id'] as String,
           businessDate: DateTime.parse(r['business_date'] as String),
           seq: r['seq'] as int,
+          workerId: r['worker_id'] as String,
           workerName: r['worker_name'] as String,
           sank: o.sank,
           expenses: o.expenses,
@@ -781,6 +782,12 @@ class Repository extends ChangeNotifier implements AdminData {
       );
     });
     await closeShift(shiftId, handover: handover);
+    await _db.update(
+      'shifts',
+      {'closed_by_admin': 1},
+      where: 'id = ?',
+      whereArgs: [shiftId],
+    );
   }
 
   Future<void> _requireOpen(String shiftId) async {
@@ -1128,19 +1135,22 @@ class Repository extends ChangeNotifier implements AdminData {
 
   /// Preuzima smjenu sa servera. Ako je telefon već ima, dodaje samo stavke koje nedostaju
   /// (artikal koji je gazda dodao usred smjene); lokalni unosi ostaju netaknuti.
-  Future<void> importShift(RemoteShift remote) async {
+  /// Sa [force] zaključena smjena sa servera zamjenjuje lokalnu i kad je telefon
+  /// smatra zaključenom (gazda ju je zaključio prije nego što je stigla s telefona).
+  Future<void> importShift(RemoteShift remote, {bool force = false}) async {
     var changed = false;
+    var isNew = false;
     await _db.transaction((txn) async {
       final existing = await txn.query(
         'shifts',
         where: 'id = ?',
         whereArgs: [remote.id],
       );
-      final isNew = existing.isEmpty;
+      isNew = existing.isEmpty;
       // Gazda je zaključio smjenu s desktopa: na telefonu od tada važi stanje sa servera.
       final adopt =
           !isNew &&
-          existing.single['closed_at'] == null &&
+          (existing.single['closed_at'] == null || force) &&
           remote.closedAt != null;
       if (isNew) {
         await txn.rawInsert(
@@ -1279,6 +1289,19 @@ class Repository extends ChangeNotifier implements AdminData {
         });
       }
     });
+    // Server ne čuva prodano, nego ostatak. Kod smjene koja je tek stigla na telefon
+    // (npr. nastavak na novom telefonu) prodano se vraća iz ostatka, da kasniji ULAZ
+    // poveća ostatak, a ne prodano.
+    if (isNew && remote.closedAt == null) {
+      const t = 'shift_lines';
+      final used = '($t.opening_qty + ${_receivedOf(t)} - $t.closing_qty)';
+      await _db.rawUpdate(
+        'UPDATE $t SET sold_qty = $used / $t.portion '
+        'WHERE $t.shift_id = ? AND $t.closing_qty IS NOT NULL AND $t.sold_qty IS NULL '
+        'AND $used >= 0 AND $used % $t.portion = 0',
+        [remote.id],
+      );
+    }
     // Gazda je možda promijenio početno stanje; prodano ostaje kako ga je konobar upisao.
     if (await _recomputeFromSold(remote.id) > 0) {
       await _changed(remote.id);
@@ -1397,6 +1420,38 @@ class Repository extends ChangeNotifier implements AdminData {
       whereArgs: [shiftId],
     );
     return rows.isNotEmpty;
+  }
+
+  /// Briše smjenu sa telefona, npr. kad je radnik nastavi na drugom telefonu.
+  Future<void> dropShift(String shiftId) async {
+    await _db.transaction((txn) async {
+      await txn.rawDelete(
+        'DELETE FROM receipt_lines WHERE receipt_id IN (SELECT id FROM receipts WHERE shift_id = ?)',
+        [shiftId],
+      );
+      for (final table in [
+        'receipts',
+        'expenses',
+        'corrections',
+        'shift_lines',
+      ]) {
+        await txn.delete(table, where: 'shift_id = ?', whereArgs: [shiftId]);
+      }
+      await txn.delete('shifts', where: 'id = ?', whereArgs: [shiftId]);
+    });
+    notifyListeners();
+  }
+
+  /// Ponovo otvara smjenu koju server nije primio kao zaključenu, da konobar unese
+  /// ono što fali; predaja se unosi ponovo pri zaključenju.
+  Future<void> reopenShift(String shiftId) async {
+    await _db.update(
+      'shifts',
+      {'closed_at': null, 'kitchen': null, 'cash': null, 'card': null},
+      where: 'id = ?',
+      whereArgs: [shiftId],
+    );
+    await _changed(shiftId);
   }
 
   /// Smjenu drugog radnika koju je gazda zaključio na serveru označava zaključenom i

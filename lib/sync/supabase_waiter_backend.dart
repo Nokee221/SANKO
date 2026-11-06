@@ -44,7 +44,12 @@ class SupabaseWaiterBackend implements WaiterBackend {
                   },
                 )
                 as Map<String, dynamic>;
-        if (r['ok'] != true) return LoginResult.rejected(r['error'] as String);
+        if (r['ok'] != true) {
+          return LoginResult.rejected(
+            r['error'] as String,
+            code: r['code'] as String?,
+          );
+        }
         await _repo.setMeta(_tokenKey, r['token'] as String);
         return LoginResult.ok(
           workerId: r['worker']['id'] as String,

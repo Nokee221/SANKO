@@ -6,11 +6,13 @@ import 'package:uuid/uuid.dart';
 import '../data/models.dart';
 import '../data/orders.dart';
 import '../data/repository.dart';
+import 'remote_shift.dart';
 import 'waiter_backend.dart';
 
 const _venueCodeKey = 'venue_code';
 const _venueNameKey = 'venue_name';
 const _sessionWorkerKey = 'session_worker_id';
+const _noticeKey = 'notice';
 
 /// Veza telefona sa serverom: prijava, početak smjene i slanje unosa.
 /// Unos tokom smjene ide u lokalnu bazu; odavde se šalje čim ima mreže.
@@ -46,6 +48,7 @@ class WaiterSync extends ChangeNotifier {
     _venueCode = await _repo.meta(_venueCodeKey);
     _venueName = await _repo.meta(_venueNameKey);
     _sessionWorkerId = await _repo.meta(_sessionWorkerKey);
+    _notice = await _repo.meta(_noticeKey);
     _hasUnsent = await _repo.hasUnsent();
     if (_autoSync) {
       _repo.addListener(_schedulePush);
@@ -85,10 +88,15 @@ class WaiterSync extends ChangeNotifier {
           'Nema interneta. Prva prijava na ovom telefonu traži internet.',
         );
       }
+      // Na serveru je telefon možda prijavljen kao drugi radnik; prijava se
+      // ponavlja čim se mreža vrati, da unosi ovog radnika odu na server.
+      _pendingLogin = cached.id == _sessionWorkerId ? null : (cached.id, pin);
       return cached;
     }
+    _pendingLogin = null;
     if (!result.ok) {
-      await _repo.forgetPin(pin);
+      // Zaključana prijava ili istekla pretplata ne znače da PIN ne valja.
+      if (result.wrongPin) await _repo.forgetPin(pin);
       throw SankoException(result.error!);
     }
     await _repo.cacheWorker(
@@ -112,7 +120,23 @@ class WaiterSync extends ChangeNotifier {
     );
   }
 
-  Future<void> _refreshing = Future.value();
+  Future<String?> _refreshing = Future.value();
+
+  /// Radnik prijavljen bez mreže dok je telefon na serveru prijavljen kao drugi.
+  (String, String)? _pendingLogin;
+
+  /// Poruka konobaru o smjeni koju je server riješio drugačije nego telefon
+  /// (npr. gazda ju je zaključio); stoji dok je konobar ne skloni.
+  String? get notice => _notice;
+  String? _notice;
+
+  Future<void> _setNotice(String? text) async {
+    _notice = text;
+    await _repo.setMeta(_noticeKey, text);
+    notifyListeners();
+  }
+
+  Future<void> dismissNotice() => _setNotice(null);
 
   /// Osvježavanje otvorene smjene i slika koje je pokrenula zadnja prijava;
   /// prijava ga ne čeka, da konobar odmah uđe.
@@ -146,7 +170,7 @@ class WaiterSync extends ChangeNotifier {
       if (_sessionWorkerId != worker.id) throw const OfflineException();
       return await call();
     } on OfflineException {
-      throw SankoException(offlineMessage);
+      throw NoConnectionException(offlineMessage);
     }
   }
 
@@ -169,7 +193,7 @@ class WaiterSync extends ChangeNotifier {
 
   Future<Order> placeOrder(Worker worker, NewOrder order) => _online(
     worker,
-    'Nema interneta. Narudžba nije poslana; pokušajte ponovo.',
+    'Nema veze sa serverom. Narudžba možda nije stigla na šank; pošaljite je ponovo.',
     () => _backend.placeOrder(order),
   );
 
@@ -206,6 +230,18 @@ class WaiterSync extends ChangeNotifier {
   /// u međuvremenu zaključio. Vraća poruku za korisnika kad osvježavanje nije uspjelo
   /// ili tuđa smjena i dalje blokira, inače null.
   Future<String?> refresh({bool images = false}) async {
+    if (_pendingLogin case (_, final pin)) {
+      try {
+        await login(pin);
+        if (_pendingLogin != null) {
+          return 'Nema interneta. Artikli će se osvježiti kad se veza vrati.';
+        }
+        // Prijava je pokrenula slanje i osvježavanje; sačekaj ih.
+        return await _refreshing;
+      } on SankoException catch (e) {
+        return e.message;
+      }
+    }
     final workerId = _sessionWorkerId;
     if (workerId == null) return null;
     await pushNow();
@@ -238,6 +274,42 @@ class WaiterSync extends ChangeNotifier {
     return null;
   }
 
+  /// Server nije primio smjenu onako kako je telefon šalje. Telefon preuzima stanje sa
+  /// servera i konobaru ostavlja poruku, da ništa ne nestane bez objašnjenja.
+  Future<void> _resolveConflict(
+    RemoteShift shift,
+    ShiftConflictException e,
+  ) async {
+    final [y, m, d] = shift.businessDate.split('-');
+    final label = '${shift.seq} od $d.$m.$y.';
+    switch (e.conflict) {
+      case ShiftConflict.closedByAdmin:
+        await _repo.importShift(
+          await _backend.fetchShift(shift.id),
+          force: true,
+        );
+        await _setNotice(
+          'Gazda je zaključio smjenu $label Unosi koji tada nisu bili poslani '
+          'nisu uračunati; javite gazdi ako nešto fali.',
+        );
+      case ShiftConflict.takenOver:
+        final remote = await _backend.fetchShift(shift.id);
+        if (remote.closedAt != null) {
+          await _repo.importShift(remote, force: true);
+        } else {
+          await _repo.dropShift(shift.id);
+        }
+        await _setNotice(
+          'Smjena $label nastavljena je na drugom telefonu. Unosi sa ovog telefona '
+          'koji tada nisu bili poslani nisu uračunati.',
+        );
+      case ShiftConflict.missingCounts:
+        await _repo.reopenShift(shift.id);
+        await _repo.importShift(await _backend.fetchShift(shift.id));
+        await _setNotice('${e.message} Smjena je ponovo otvorena.');
+    }
+  }
+
   void _schedulePush() {
     _debounce?.cancel();
     _debounce = Timer(const Duration(seconds: 2), pushNow);
@@ -261,7 +333,12 @@ class WaiterSync extends ChangeNotifier {
       final dirty = await _repo.dirtyShifts(workerId);
       for (final MapEntry(key: shiftId, value: revision) in dirty.entries) {
         final shift = await _repo.exportShift(shiftId);
-        await _backend.pushShift(shift.toPayload());
+        try {
+          await _backend.pushShift(shift.toPayload());
+        } on ShiftConflictException catch (e) {
+          await _resolveConflict(shift, e);
+          continue;
+        }
         await _repo.markClean(shiftId, revision);
         // Gazda je možda usred smjene dodao artikal; preuzmi stavke koje nedostaju.
         if (shift.closedAt == null) {

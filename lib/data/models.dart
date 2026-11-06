@@ -162,6 +162,7 @@ class Shift {
     closedAt: r['closed_at'] == null
         ? null
         : DateTime.fromMillisecondsSinceEpoch(r['closed_at'] as int),
+    closedByAdmin: r['closed_by_admin'] == 1,
   );
 }
 

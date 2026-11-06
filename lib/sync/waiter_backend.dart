@@ -9,9 +9,10 @@ class LoginResult {
     required String this.workerName,
     required String this.venueName,
     this.role = WorkerRole.konobar,
-  }) : error = null;
+  }) : error = null,
+       code = null;
 
-  const LoginResult.rejected(String this.error)
+  const LoginResult.rejected(String this.error, {this.code})
     : workerId = null,
       workerName = null,
       venueName = null,
@@ -19,6 +20,14 @@ class LoginResult {
 
   /// Poruka servera kad prijava nije prihvaćena; null kad jeste.
   final String? error;
+
+  /// Razlog odbijanja: 'wrong_pin', 'locked' ili 'expired'; starija baza ga ne šalje.
+  final String? code;
+
+  /// Server je odbio baš ovaj PIN, a ne npr. zaključao prijavu zbog tuđih pokušaja.
+  bool get wrongPin =>
+      code == 'wrong_pin' ||
+      (code == null && error == 'Pogrešan kod lokala ili PIN.');
   final String? workerId;
   final String? workerName;
   final String? venueName;

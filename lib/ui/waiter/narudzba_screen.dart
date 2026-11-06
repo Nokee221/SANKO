@@ -42,6 +42,22 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
   String _orderId = const Uuid().v4();
   bool _sending = false;
 
+  /// Slanje se prekinulo bez odgovora, pa je narudžba možda već na šanku. Dok se
+  /// ne pošalje ponovo ili očisti, korpa se ne mijenja: ponovljeno slanje sa istom
+  /// oznakom server ne upisuje dvaput, ali ne bi upisao ni naknadno dodane artikle.
+  bool _unsure = false;
+
+  void _locked() => ScaffoldMessenger.of(context)
+    ..hideCurrentSnackBar()
+    ..showSnackBar(
+      const SnackBar(
+        content: Text(
+          'Prvo pošaljite ponovo ovu narudžbu ili je očistite; '
+          'dodatak kucajte kao novu narudžbu.',
+        ),
+      ),
+    );
+
   @override
   void initState() {
     super.initState();
@@ -68,6 +84,7 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
   }
 
   void _add(MenuItem item, int delta) {
+    if (_unsure) return _locked();
     setState(() {
       final qty = (_cart[item.id] ?? 0) + delta;
       if (qty <= 0) {
@@ -82,9 +99,11 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
     _cart.clear();
     _note = null;
     _orderId = const Uuid().v4();
+    _unsure = false;
   });
 
   Future<void> _editNote() async {
+    if (_unsure) return _locked();
     final note = await showDialog<String>(
       context: context,
       builder: (_) => _NoteDialog(initial: _note ?? ''),
@@ -118,6 +137,10 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
       _clear();
       // Sljedeća narudžba je obično za drugi sto.
       if (_menu!.tables.isNotEmpty) setState(() => _table = null);
+    } on NoConnectionException catch (e) {
+      if (!mounted) return;
+      setState(() => _unsure = true);
+      await showError(context, e.message);
     } on SankoException catch (e) {
       if (mounted) await showError(context, e.message);
     } finally {
@@ -140,7 +163,10 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
       // Nazad iz artikala vraća na izbor stola, osim kad je korpa prazna.
       canPop: !(menu != null && menu.tables.isNotEmpty && _table != null),
       onPopInvokedWithResult: (didPop, _) {
-        if (!didPop) setState(() => _table = null);
+        if (didPop) return;
+        // Sto se ne mijenja dok nije jasno je li narudžba stigla.
+        if (_unsure) return _locked();
+        setState(() => _table = null);
       },
       child: Scaffold(
         appBar: AppBar(
@@ -270,6 +296,16 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (_unsure)
+              const Padding(
+                padding: EdgeInsets.only(bottom: 6),
+                child: Text(
+                  'Narudžba je možda već stigla na šank. Pošaljite je ponovo '
+                  '(neće se upisati dvaput) ili je očistite.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(color: SankoColors.waiting, fontSize: 13),
+                ),
+              ),
             Row(
               children: [
                 Expanded(

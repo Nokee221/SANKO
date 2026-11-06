@@ -95,7 +95,28 @@ class _ImportDialogState extends State<_ImportDialog> {
 
   int get _count => _rows.where((r) => r.selected).length;
 
+  /// Gramaža porcije za sve artikle u gramima; bez nje bi svaka porcija skidala 1 g.
+  final _portion = TextEditingController();
+
+  bool get _hasGrams =>
+      _rows.any((r) => r.selected && r.kind == ItemKind.counter);
+
+  @override
+  void dispose() {
+    _portion.dispose();
+    super.dispose();
+  }
+
   Future<void> _save() async {
+    final portion = _hasGrams ? int.tryParse(_portion.text.trim()) : 1;
+    if (portion == null || portion <= 0) {
+      showError(
+        context,
+        'Unesite gramažu jedne porcije za kafu i nes, npr. 20. '
+        'Kasnije je možete promijeniti za svaki artikal u Artiklima.',
+      );
+      return;
+    }
     final items = [
       for (final r in _rows)
         if (r.selected)
@@ -108,6 +129,7 @@ class _ImportDialogState extends State<_ImportDialog> {
                 .where((c) => c.name == r.item.name)
                 .firstOrNull
                 ?.id,
+            portion: r.kind == ItemKind.counter ? portion : 1,
           ),
     ];
     final count = items.length;
@@ -172,7 +194,7 @@ class _ImportDialogState extends State<_ImportDialog> {
                         ),
                         DropdownMenuItem(
                           value: ItemKind.counter,
-                          child: Text('brojač'),
+                          child: Text('grami'),
                         ),
                       ],
                       onChanged: (k) => setState(() => r.kind = k!),
@@ -243,7 +265,7 @@ class _ImportDialogState extends State<_ImportDialog> {
                 ),
                 DropdownMenuItem(
                   value: ItemKind.counter,
-                  child: Text('Brojač aparata'),
+                  child: Text('Grami (kafa)'),
                 ),
               ],
               onChanged: (k) => setState(() => r.kind = k!),
@@ -288,7 +310,7 @@ class _ImportDialogState extends State<_ImportDialog> {
               'U fajlu je ${_rows.length} '
               '${plural(_rows.length, 'artikal', 'artikla', 'artikala')}. '
               'Stanje iz tabele postaje početno stanje. '
-              'Provjerite vrstu; kafa i nes s aparata se vode kao brojač.',
+              'Provjerite vrstu; kafa i nes se vode u gramima, uz gramažu porcije.',
             ),
             const SizedBox(height: 12),
             Row(
@@ -336,6 +358,21 @@ class _ImportDialogState extends State<_ImportDialog> {
                 children: [for (final r in _rows) _row(r)],
               ),
             ),
+            if (_hasGrams) ...[
+              const SizedBox(height: 12),
+              SizedBox(
+                width: 320,
+                child: TextField(
+                  controller: _portion,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(
+                    labelText: 'Gramaža jedne porcije (kafa, nes)',
+                    suffixText: 'g',
+                    helperText: 'Važi za sve artikle u gramima iz ove tabele.',
+                  ),
+                ),
+              ),
+            ],
           ],
         ),
       ),

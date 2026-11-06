@@ -135,8 +135,11 @@ void main() {
     await tapText(tester, 'ČAJ');
     backend.offline = true;
     await tapText(tester, 'Naruči · 1 kom · ${fmtKm(300)}');
-    expect(find.textContaining('Narudžba nije poslana'), findsOneWidget);
+    expect(find.textContaining('Narudžba možda nije stigla'), findsOneWidget);
     await tapText(tester, 'U redu');
+    // Dok nije jasno je li stigla, korpa se ne mijenja: dodatak bi se tiho izgubio.
+    await tapText(tester, 'KOLA');
+    expect(find.text('Naruči · 1 kom · ${fmtKm(300)}'), findsOneWidget);
     backend.offline = false;
     await tapText(tester, 'Naruči · 1 kom · ${fmtKm(300)}');
     expect(find.text('Poslano na šank: Narudžba 2'), findsOneWidget);

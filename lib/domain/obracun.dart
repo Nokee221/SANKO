@@ -62,7 +62,8 @@ class ObracunLine {
   int get total => opening + received;
 
   /// Prebrojano je više nego što je moglo biti: zaboravljen ulaz ili greška u brojanju.
-  bool get hasAnomaly => consumed != null && consumed! < 0;
+  /// Gleda grame, a ne porcije, da ne promakne višak manji od jedne porcije.
+  bool get hasAnomaly => closing != null && closing! > total;
 }
 
 class Obracun {

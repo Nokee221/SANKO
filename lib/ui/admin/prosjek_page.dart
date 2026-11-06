@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../data/models.dart';
 import '../../domain/stats.dart';
 import '../format.dart';
 import '../theme.dart';
@@ -487,9 +488,22 @@ class _AveragesTable extends StatelessWidget {
                 ),
                 cell(fmtAvg(i.perShift)),
                 cell('${i.maxShift}'),
-                cell(i.received == 0 ? '–' : fmtAvg(i.receivedPerDay)),
+                // Ulaz kafe je u gramima, a potrošnja u porcijama.
+                cell(
+                  i.received == 0
+                      ? '–'
+                      : i.kind == ItemKind.counter
+                      ? '${fmtAvg(i.receivedPerDay)} g'
+                      : fmtAvg(i.receivedPerDay),
+                ),
                 cell('${i.consumed}'),
-                cell(i.received == 0 ? '–' : '${i.received}'),
+                cell(
+                  i.received == 0
+                      ? '–'
+                      : i.kind == ItemKind.counter
+                      ? fmtGrams(i.received)
+                      : '${i.received}',
+                ),
                 cell('${forecasts[i.itemId]?.level.stock ?? '–'}'),
                 cell(
                   forecasts[i.itemId]?.daysLeft == null

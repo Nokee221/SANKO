@@ -10,6 +10,7 @@ class ShiftSummary {
     required this.workerName,
     required this.sank,
     required this.expenses,
+    this.workerId,
     this.kitchen,
     this.cash,
     this.card,
@@ -22,6 +23,7 @@ class ShiftSummary {
     shiftId: j['shift_id'] as String,
     businessDate: DateTime.parse(j['business_date'] as String),
     seq: j['seq'] as int,
+    workerId: j['worker_id'] as String?,
     workerName: j['worker_name'] as String,
     sank: (j['sank'] as num).toInt(),
     expenses: (j['expenses'] as num).toInt(),
@@ -38,6 +40,9 @@ class ShiftSummary {
   final String shiftId;
   final DateTime businessDate;
   final int seq;
+
+  /// Radnik smjene; dva radnika mogu imati isto ime.
+  final String? workerId;
   final String workerName;
   final int sank;
   final int expenses;
@@ -218,22 +223,26 @@ class MonthReport {
     );
   }
 
-  /// Konobari po prometu.
+  /// Konobari po prometu; radnici istog imena ostaju odvojeni.
   List<WorkerReport> get workers {
+    String keyOf(ShiftSummary s) => s.workerId ?? s.workerName;
     final byWorker = <String, List<ShiftSummary>>{};
+    final workerOfShift = <String, String>{};
     for (final s in shifts) {
-      byWorker.putIfAbsent(s.workerName, () => []).add(s);
+      byWorker.putIfAbsent(keyOf(s), () => []).add(s);
+      workerOfShift[s.shiftId] = keyOf(s);
     }
     final suspicious = <String, int>{};
     for (final a in ItemStats.compute(lines).anomalies) {
-      suspicious.update(a.line.workerName, (v) => v + 1, ifAbsent: () => 1);
+      final key = workerOfShift[a.line.shiftId] ?? a.line.workerName;
+      suspicious.update(key, (v) => v + 1, ifAbsent: () => 1);
     }
     return [
-      for (final MapEntry(key: name, value: list) in byWorker.entries)
+      for (final MapEntry(key: key, value: list) in byWorker.entries)
         WorkerReport(
-          name: name,
+          name: list.last.workerName,
           shifts: list,
-          anomalies: suspicious[name] ?? 0,
+          anomalies: suspicious[key] ?? 0,
         ),
     ]..sort((a, b) => b.revenue.compareTo(a.revenue));
   }

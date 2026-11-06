@@ -10,6 +10,8 @@ Future<T> supabaseCall<T>(Future<T> Function() call) async {
   try {
     return await call().timeout(const Duration(seconds: 15));
   } on PostgrestException catch (e) {
+    final conflict = ShiftConflict.fromCode(e.code);
+    if (conflict != null) throw ShiftConflictException(conflict, e.message);
     throw SankoException(e.message);
   } on AuthRetryableFetchException {
     throw const OfflineException();

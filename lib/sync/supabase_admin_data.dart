@@ -369,6 +369,8 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
             opening: l['opening_qty'] as int,
             received: received[l['item_id']] ?? 0,
             closing: l['closing_qty'] as int?,
+            // Kafa se vodi u gramima; bez gramaže bi se svaki gram računao kao porcija.
+            portion: l['portion'] as int? ?? 1,
           ),
       ],
       expenses: spent.fold(0, (sum, e) => sum + e.amount),

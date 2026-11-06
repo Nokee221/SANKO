@@ -5,6 +5,7 @@ import 'package:sanko/data/repository.dart';
 import 'package:sanko/sync/remote_shift.dart';
 import 'package:sanko/sync/waiter_backend.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:uuid/uuid.dart';
 
 const testVenueCode = 'TEST01';
 
@@ -45,11 +46,20 @@ class FakeBackend implements WaiterBackend {
   @override
   Future<LoginResult> login(String venueCode, String pin) async {
     _requireNetwork();
+    if (locked) {
+      return const LoginResult.rejected(
+        'Previše pogrešnih pokušaja. Pokušajte ponovo za 15 minuta.',
+        code: 'locked',
+      );
+    }
     final worker = venueCode == testVenueCode
         ? await server.workerByPin(pin)
         : null;
     if (worker == null) {
-      return const LoginResult.rejected('Pogrešan kod lokala ili PIN.');
+      return const LoginResult.rejected(
+        'Pogrešan kod lokala ili PIN.',
+        code: 'wrong_pin',
+      );
     }
     sessionWorkerId = worker.id;
     return LoginResult.ok(
@@ -60,15 +70,28 @@ class FakeBackend implements WaiterBackend {
     );
   }
 
+  /// Oznaka ovog telefona; smjenu vodi telefon koji ju je zadnji otvorio ili nastavio.
+  final String deviceId = const Uuid().v4();
+
+  /// Zaključava prijavu kao kad lokal ima previše pogrešnih pokušaja.
+  bool locked = false;
+
+  Future<void> _takeOver(String shiftId) =>
+      server.setMeta('owner:$shiftId', deviceId);
+
   @override
   Future<RemoteShift> startShift(String newShiftId) async {
     _requireNetwork();
     final open = await server.openShift();
     if (open != null) {
-      if (open.workerId == sessionWorkerId) return server.exportShift(open.id);
+      if (open.workerId == sessionWorkerId) {
+        await _takeOver(open.id);
+        return server.exportShift(open.id);
+      }
       throw SankoException('Smjenu još nije zaključio/la ${open.workerName}.');
     }
     final shift = await server.startShift(sessionWorkerId!);
+    await _takeOver(shift.id);
     return server.exportShift(shift.id);
   }
 
@@ -109,7 +132,44 @@ class FakeBackend implements WaiterBackend {
     if (shift.isEmpty || shift.single['worker_id'] != sessionWorkerId) {
       throw SankoException('Smjena ne postoji ili nije vaša');
     }
+    if (shift.single['closed_by_admin'] == 1) {
+      throw ShiftConflictException(
+        ShiftConflict.closedByAdmin,
+        'Smjenu je zaključio gazda.',
+      );
+    }
+    final owner = await server.meta('owner:$id');
+    if (owner != null && owner != deviceId) {
+      throw ShiftConflictException(
+        ShiftConflict.takenOver,
+        'Ova smjena je nastavljena na drugom telefonu.',
+      );
+    }
     if (shift.single['closed_at'] != null) return;
+    if (payload['closed_at'] != null) {
+      final counted = {
+        for (final c
+            in (payload['counts'] as List).cast<Map<String, Object?>>())
+          c['item_id'],
+      };
+      final lines = await db.query(
+        'shift_lines',
+        columns: ['item_id', 'item_name'],
+        where: 'shift_id = ?',
+        whereArgs: [id],
+      );
+      final missing = [
+        for (final l in lines)
+          if (!counted.contains(l['item_id'])) l['item_name'],
+      ];
+      if (missing.isNotEmpty) {
+        throw ShiftConflictException(
+          ShiftConflict.missingCounts,
+          'Nije uneseno stanje za: ${missing.join(', ')}. '
+          'Unesite ga i ponovo zaključite smjenu.',
+        );
+      }
+    }
 
     int? ms(Object? iso) => iso == null
         ? null

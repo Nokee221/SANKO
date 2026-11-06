@@ -62,7 +62,8 @@ const _schema = [
     dirty INTEGER NOT NULL DEFAULT 0,
     kitchen INTEGER,
     cash INTEGER,
-    card INTEGER
+    card INTEGER,
+    closed_by_admin INTEGER NOT NULL DEFAULT 0
   )''',
   'CREATE INDEX shifts_business_date_idx ON shifts (business_date)',
   // Naziv, vrsta i cijena se kopiraju pri otvaranju smjene,
@@ -120,7 +121,7 @@ Future<void> createSchema(Database db) async {
 
 Future<Database> openAppDatabase() async {
   final options = OpenDatabaseOptions(
-    version: 8,
+    version: 9,
     onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
     onCreate: (db, _) => createSchema(db),
     onUpgrade: (db, from, _) async {
@@ -175,6 +176,12 @@ Future<Database> openAppDatabase() async {
         );
         await db.execute(
           'ALTER TABLE shift_lines ADD COLUMN portion INTEGER NOT NULL DEFAULT 1',
+        );
+      }
+      if (from < 9) {
+        // Smjena koju je zaključio gazda, kao na serveru.
+        await db.execute(
+          'ALTER TABLE shifts ADD COLUMN closed_by_admin INTEGER NOT NULL DEFAULT 0',
         );
       }
     },

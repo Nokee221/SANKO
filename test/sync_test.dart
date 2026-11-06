@@ -499,4 +499,159 @@ void main() {
     await phone.sync.pendingRefresh;
     expect(await phone.repo.openShift(), isNull);
   });
+
+  test(
+    'smjenu koju konobar zaključi bez mreže, a gazda prije njega, telefon preuzima sa porukom',
+    () async {
+      final phone = await newPhone();
+      final shift = await phone.sync.startShift(await phone.sync.login('1111'));
+      final lines = (await phone.repo.obracunForShift(shift.id)).lines;
+
+      phone.backend.offline = true;
+      await phone.repo.addExpense(shift.id, description: 'Limun', amount: 500);
+      await count(phone, shift.id, {'KAFA': 148600, 'KOLA': 60});
+      await phone.repo.closeShift(
+        shift.id,
+        handover: const Handover(kitchen: 0, cash: 1000, card: 0),
+      );
+
+      await server.adminCloseShift(shift.id, {
+        for (final l in lines) l.itemId: l.name == 'KAFA' ? 148700 : 70,
+      });
+
+      phone.backend.offline = false;
+      await phone.sync.pushNow();
+
+      expect(phone.sync.hasUnsent, isFalse);
+      expect(phone.sync.lastError, isNull);
+      expect(phone.sync.notice, contains('Gazda je zaključio'));
+      final o = await phone.repo.obracunForShift(shift.id);
+      expect(line(o, 'KOLA').closing, 70, reason: 'važi stanje sa servera');
+      expect(o.expenses, 0);
+      expect(o.cash, isNull);
+      // Server nije primio ništa poslije gazdinog zaključenja.
+      expect((await server.obracunForShift(shift.id)).expenses, 0);
+
+      await phone.sync.dismissNotice();
+      expect(phone.sync.notice, isNull);
+    },
+  );
+
+  test('stari telefon ne prepisuje smjenu nastavljenu na novom', () async {
+    final old = await newPhone();
+    final shift = await old.sync.startShift(await old.sync.login('1111'));
+    old.backend.offline = true;
+    await old.repo.addExpense(shift.id, description: 'Limun', amount: 500);
+
+    final fresh = await newPhone();
+    await fresh.sync.startShift(await fresh.sync.login('1111'));
+    await fresh.repo.addExpense(shift.id, description: 'Led', amount: 200);
+    await fresh.sync.pushNow();
+
+    // Stari telefon se vrati na mrežu; njegovo slanje ne smije obrisati rashod sa novog.
+    old.backend.offline = false;
+    await old.sync.pushNow();
+
+    final onServer = await server.expenses(shift.id);
+    expect(onServer.map((e) => e.description), ['Led']);
+    expect(await old.repo.openShift(), isNull);
+    expect(old.sync.hasUnsent, isFalse);
+    expect(old.sync.notice, contains('na drugom telefonu'));
+  });
+
+  test(
+    'artikal koji gazda doda dok konobar zaključuje ponovo otvara smjenu',
+    () async {
+      final phone = await newPhone();
+      final shift = await phone.sync.startShift(await phone.sync.login('1111'));
+      phone.backend.offline = true;
+      await count(phone, shift.id, {'KAFA': 148600, 'KOLA': 60});
+      await phone.repo.closeShift(
+        shift.id,
+        handover: const Handover(kitchen: 0, cash: 1000, card: 0),
+      );
+      await server.addItem(
+        name: 'FANTA',
+        kind: ItemKind.stock,
+        price: 350,
+        initialQty: 42,
+      );
+
+      phone.backend.offline = false;
+      await phone.sync.pushNow();
+
+      final open = await phone.repo.openShift();
+      expect(open?.id, shift.id);
+      expect(phone.sync.notice, contains('FANTA'));
+      final o = await phone.repo.obracunForShift(shift.id);
+      expect(line(o, 'FANTA').closing, isNull);
+      expect(line(o, 'KOLA').closing, 60);
+
+      await phone.repo.setSoldQty(shift.id, line(o, 'FANTA').itemId, 2);
+      await phone.repo.closeShift(
+        shift.id,
+        handover: const Handover(kitchen: 0, cash: 1000, card: 0),
+      );
+      await phone.sync.pushNow();
+      expect((await server.shiftById(shift.id)).isClosed, isTrue);
+      expect(phone.sync.hasUnsent, isFalse);
+    },
+  );
+
+  test(
+    'na novom telefonu kasniji ULAZ povećava ostatak, a ne prodano',
+    () async {
+      final old = await newPhone();
+      final shift = await old.sync.startShift(await old.sync.login('1111'));
+      final kola = line(await old.repo.obracunForShift(shift.id), 'KOLA');
+      await old.repo.setSoldQty(shift.id, kola.itemId, 7);
+      await old.sync.pushNow();
+
+      final fresh = await newPhone();
+      await fresh.sync.startShift(await fresh.sync.login('1111'));
+      await fresh.repo.setDraftReceiptQty(shift.id, kola.itemId, 24);
+      await fresh.repo.closeDraftReceipt(shift.id);
+
+      final o = await fresh.repo.obracunForShift(shift.id);
+      expect(line(o, 'KOLA').consumed, 7);
+      expect(line(o, 'KOLA').closing, 77 + 24 - 7);
+    },
+  );
+
+  test('zaključana prijava ne briše ispravan PIN sa telefona', () async {
+    final phone = await newPhone();
+    await phone.sync.login('1111');
+    await phone.sync.pendingRefresh;
+    // Prijava šalje unose i u pozadini; neka završi prije kraja testa.
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+
+    phone.backend.locked = true;
+    await expectLater(phone.sync.login('1111'), throwsA(isA<SankoException>()));
+    phone.backend.locked = false;
+
+    phone.backend.offline = true;
+    expect((await phone.sync.login('1111')).name, 'Amra');
+  });
+
+  test(
+    'radnik prijavljen bez mreže šalje svoje unose kad se mreža vrati',
+    () async {
+      final phone = await newPhone();
+      final shift = await phone.sync.startShift(await phone.sync.login('1111'));
+      // Kolega se prijavi na istom telefonu, npr. da kuca narudžbu.
+      await phone.sync.login('2222');
+
+      phone.backend.offline = true;
+      await phone.sync.login('1111');
+      await phone.repo.addExpense(shift.id, description: 'Limun', amount: 500);
+
+      phone.backend.offline = false;
+      expect(await phone.sync.refresh(), isNull);
+      await Future.doWhile(() async {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+        return phone.sync.hasUnsent;
+      });
+      expect((await server.expenses(shift.id)).single.description, 'Limun');
+    },
+  );
 }
