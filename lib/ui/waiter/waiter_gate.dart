@@ -524,7 +524,7 @@ class _Home extends StatelessWidget {
                         const SizedBox(height: 12),
                         ModeTile(
                           title: 'STANJE',
-                          subtitle: 'Koliko je prodano u smjeni',
+                          subtitle: 'Koliko je ostalo na kraju smjene',
                           value: '$entered/${lines.length}',
                           valueLabel: 'uneseno',
                           icon: Icons.fact_check_outlined,

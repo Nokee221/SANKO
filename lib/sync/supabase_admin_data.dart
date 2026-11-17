@@ -564,4 +564,41 @@ class SupabaseAdminData extends ChangeNotifier implements AdminData {
       return const [];
     }
   }
+
+  @override
+  Future<PreviousStock> previousStock() => _call(() async {
+    final last = await _client
+        .from('shifts')
+        .select()
+        .eq('venue_id', venueId)
+        .not('closed_at', 'is', null)
+        .order('closed_at', ascending: false)
+        .limit(1);
+    final shift = last.isEmpty ? null : Shift.fromRemote(last.first);
+    // Svaki aktivni artikal je u svakoj smjeni; artikal dodan poslije zadnje
+    // zaključene smjene još ima početno stanje.
+    final closing = <String, int>{
+      if (shift != null)
+        for (final l
+            in await _client
+                .from('shift_lines')
+                .select('item_id, closing_qty')
+                .eq('shift_id', shift.id))
+          l['item_id'] as String: l['closing_qty'] as int,
+    };
+    return PreviousStock(
+      shift: shift,
+      rows: [
+        for (final i in await items())
+          StockRow(
+            itemId: i.id,
+            name: i.name,
+            kind: i.kind,
+            qty: closing[i.id] ?? i.initialQty,
+            portion: i.portion,
+            imageId: i.imageId,
+          ),
+      ],
+    );
+  });
 }

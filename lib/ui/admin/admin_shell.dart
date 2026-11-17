@@ -3,14 +3,14 @@ import 'package:flutter/material.dart';
 import '../theme.dart';
 import 'items_page.dart';
 import 'izvjestaj_page.dart';
-import 'narudzba_page.dart';
 import 'obracun_page.dart';
 import 'prosjek_page.dart';
+import 'stanje_page.dart';
 import 'tables_page.dart';
 import 'widgets.dart';
 import 'workers_page.dart';
 
-/// Admin panel jednog lokala: obračun, izvještaji, narudžba, artikli, radnici i stolovi.
+/// Admin panel jednog lokala: obračun, izvještaji, stanje, artikli, radnici i stolovi.
 class AdminShell extends StatefulWidget {
   const AdminShell({super.key, this.header, this.footer, this.venueName = ''});
 
@@ -34,7 +34,7 @@ class _AdminShellState extends State<AdminShell> {
     (Icons.table_chart_outlined, 'Obračun'),
     (Icons.bar_chart_outlined, 'Izvještaj'),
     (Icons.insights_outlined, 'Prosjek'),
-    (Icons.shopping_cart_outlined, 'Narudžba'),
+    (Icons.inventory_2_outlined, 'Stanje'),
     (Icons.local_bar_outlined, 'Artikli'),
     (Icons.people_outline, 'Radnici'),
     (Icons.table_restaurant_outlined, 'Stolovi'),
@@ -92,7 +92,7 @@ class _AdminShellState extends State<AdminShell> {
               0 => ObracunPage(venueName: widget.venueName),
               1 => IzvjestajPage(venueName: widget.venueName),
               2 => const ProsjekPage(),
-              3 => NarudzbaPage(venueName: widget.venueName),
+              3 => const StanjePage(),
               4 => const ItemsPage(),
               5 => const WorkersPage(),
               _ => const TablesPage(),

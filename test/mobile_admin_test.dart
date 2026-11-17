@@ -232,11 +232,11 @@ void main() {
     await tap(find.text('Amra'));
     await _shot('07_izvjestaj_konobar');
 
-    // Narudžba.
-    await tap(find.text('Narudžba'));
-    expect(find.text('Pošalji na Viber'), findsOneWidget);
+    // Stanje nakon zadnje zaključene smjene.
+    await tap(find.text('Stanje'));
+    expect(find.textContaining('Ostalo nakon smjene'), findsOneWidget);
     expect(find.text('KOLA'), findsOneWidget);
-    await _shot('08_narudzba');
+    await _shot('08_stanje');
 
     // Artikli i dijalog artikla.
     await tap(find.text('Artikli'));

@@ -107,8 +107,21 @@ void main() {
     await shot('32_izbor_stola');
     await tapText(tester, 'Sto 2');
 
+    // Kafa: prvo dužina, pa mlijeko.
     await tapText(tester, 'KAFA');
+    expect(find.text('1/2'), findsOneWidget);
+    await shot('36_kafa_izbor');
+    await tapText(tester, 'Duža');
+    expect(find.text('2/2'), findsOneWidget);
+    await tapText(tester, 'Sa mlijekom');
     await tapText(tester, 'KAFA');
+    await tapText(tester, 'Kraća');
+    await tapText(tester, 'Bez mlijeka');
+    // Odustajanje ne dodaje ništa.
+    await tapText(tester, 'KAFA');
+    await tapText(tester, 'Odustani');
+    expect(find.text('Naruči · 2 kom · ${fmtKm(500)}'), findsOneWidget);
+    expect(find.text('1× KAFA · Duža, Sa mlijekom'), findsOneWidget);
     await tapText(tester, 'KOLA');
     await tester.longPress(find.text('KOLA'));
     await tester.pumpAndSettle();
@@ -125,14 +138,16 @@ void main() {
     expect(find.text('Izaberite sto'), findsOneWidget, reason: 'sljedeći sto');
     expect(orders.single.tableName, 'Sto 2');
     expect(orders.single.note, 'kafa bez šećera');
-    expect(orders.single.lines.map((l) => '${l.qty}× ${l.name}'), [
-      '2× KAFA',
+    expect(orders.single.lines.map((l) => '${l.qty}× ${l.label}'), [
+      '1× KAFA (Duža, Sa mlijekom)',
+      '1× KAFA (Kraća, Bez mlijeka)',
       '1× KOLA',
     ]);
 
     // Bez interneta narudžba ostaje u korpi; ponovljeno slanje ne pravi duplikat.
     await tapText(tester, 'Bez stola');
     await tapText(tester, 'ČAJ');
+    await tapText(tester, 'Menta');
     backend.offline = true;
     await tapText(tester, 'Naruči · 1 kom · ${fmtKm(300)}');
     expect(find.textContaining('Narudžba možda nije stigla'), findsOneWidget);
@@ -207,6 +222,9 @@ void main() {
     await tester.pump(const Duration(seconds: 5));
     await tester.pumpAndSettle();
     expect(find.text('Narudžba 3'), findsOneWidget);
+    // Obavještenje na vrhu; tap otvara narudžbu.
+    expect(find.text('Nova narudžba · Narudžba 3'), findsOneWidget);
+    await tapText(tester, 'Nova narudžba · Narudžba 3');
     expect(find.text('Šank · 3 narudžbe čekaju'), findsOneWidget);
   });
 }

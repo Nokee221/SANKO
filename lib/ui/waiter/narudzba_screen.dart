@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import '../../data/errors.dart';
 import '../../data/models.dart';
 import '../../data/orders.dart';
+import '../../domain/order_options.dart';
 import '../common.dart';
 import '../format.dart';
 import '../theme.dart';
@@ -34,8 +35,8 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
 
   VenueTable? _table;
 
-  /// Količina po artiklu, redom kako su kucani.
-  final Map<String, int> _cart = {};
+  /// Količina po stavci (artikal sa izborom), redom kako su kucane.
+  final Map<CartKey, int> _cart = {};
   String? _note;
 
   /// Oznaka narudžbe se pravi jednom po korpi, pa ponovljeno slanje ne pravi duplikat.
@@ -83,17 +84,49 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
     }
   }
 
-  void _add(MenuItem item, int delta) {
+  /// Tap dodaje komad; kod kafe i čaja prvo se biraju izbori.
+  Future<void> _add(MenuItem item) async {
+    if (_unsure) return _locked();
+    final choices = <String>[];
+    final steps = optionsFor(item.name);
+    for (final (i, step) in steps.indexed) {
+      final choice = await showModalBottomSheet<String>(
+        context: context,
+        isScrollControlled: true,
+        builder: (_) => _OptionSheet(
+          itemName: item.name,
+          step: step,
+          position: steps.length > 1 ? '${i + 1}/${steps.length}' : null,
+        ),
+      );
+      if (choice == null || !mounted) return;
+      choices.add(choice);
+    }
+    _change(CartKey(item.id, choices.join(', ')), 1);
+  }
+
+  /// Dugi pritisak oduzima komad zadnje kucane stavke tog artikla.
+  void _removeLast(MenuItem item) {
+    if (_unsure) return _locked();
+    final key = _cart.keys.where((k) => k.itemId == item.id).lastOrNull;
+    if (key != null) _change(key, -1);
+  }
+
+  void _change(CartKey key, int delta) {
     if (_unsure) return _locked();
     setState(() {
-      final qty = (_cart[item.id] ?? 0) + delta;
+      final qty = (_cart[key] ?? 0) + delta;
       if (qty <= 0) {
-        _cart.remove(item.id);
+        _cart.remove(key);
       } else {
-        _cart[item.id] = qty;
+        _cart[key] = qty;
       }
     });
   }
+
+  int _countOf(String itemId) => _cart.entries
+      .where((e) => e.key.itemId == itemId)
+      .fold(0, (sum, e) => sum + e.value);
 
   void _clear() => setState(() {
     _cart.clear();
@@ -122,7 +155,7 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
           id: _orderId,
           tableId: _table == null || _table == _noTable ? null : _table!.id,
           note: _note,
-          quantities: Map.of(_cart),
+          lines: Map.of(_cart),
         ),
       );
       if (!mounted) return;
@@ -231,10 +264,10 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
             name: item.name,
             image: item.imageId == null ? null : _images[item.imageId],
             color: ModeColors.narudzba,
-            value: _cart[item.id]?.toString(),
+            value: _countOf(item.id) == 0 ? null : '${_countOf(item.id)}',
             note: fmtKm(item.price),
-            onTap: () => _add(item, 1),
-            onLongPress: () => _add(item, -1),
+            onTap: () => _add(item),
+            onLongPress: () => _removeLast(item),
           ),
       ],
     );
@@ -283,11 +316,11 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
   }
 
   Widget _bottomBar(Menu menu) {
-    final prices = {for (final i in menu.items) i.id: i.price};
+    final byId = {for (final i in menu.items) i.id: i};
     final count = _cart.values.fold(0, (a, b) => a + b);
     final total = _cart.entries.fold(
       0,
-      (sum, e) => sum + (prices[e.key] ?? 0) * e.value,
+      (sum, e) => sum + (byId[e.key.itemId]?.price ?? 0) * e.value,
     );
     return SafeArea(
       child: Padding(
@@ -305,6 +338,18 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
                   textAlign: TextAlign.center,
                   style: TextStyle(color: SankoColors.waiting, fontSize: 13),
                 ),
+              ),
+            if (_cart.isNotEmpty)
+              _CartStrip(
+                lines: [
+                  for (final e in _cart.entries)
+                    (
+                      key: e.key,
+                      qty: e.value,
+                      name: byId[e.key.itemId]?.name ?? '',
+                    ),
+                ],
+                onRemove: (key) => _change(key, -1),
               ),
             Row(
               children: [
@@ -347,6 +392,141 @@ class _NarudzbaScreenState extends State<NarudzbaScreen> {
               ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// Korpa iznad dugmeta: svaka stavka sa izborom; minus oduzima komad.
+class _CartStrip extends StatelessWidget {
+  const _CartStrip({required this.lines, required this.onRemove});
+
+  final List<({CartKey key, int qty, String name})> lines;
+  final ValueChanged<CartKey> onRemove;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 44,
+      child: ListView(
+        scrollDirection: Axis.horizontal,
+        children: [
+          for (final l in lines)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: InputChip(
+                label: Text(
+                  l.key.variant.isEmpty
+                      ? '${l.qty}× ${l.name}'
+                      : '${l.qty}× ${l.name} · ${l.key.variant}',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                deleteIcon: const Icon(Icons.remove_circle_outline, size: 18),
+                onDeleted: () => onRemove(l.key),
+                backgroundColor: WaiterColors.surface,
+                side: const BorderSide(color: WaiterColors.line),
+                shape: const StadiumBorder(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Izbor za artikal, npr. dužina kafe; zatvara se sa izabranim tekstom.
+class _OptionSheet extends StatelessWidget {
+  const _OptionSheet({
+    required this.itemName,
+    required this.step,
+    this.position,
+  });
+
+  final String itemName;
+  final OptionStep step;
+
+  /// Korak, npr. "1/2", kad izbora ima više.
+  final String? position;
+
+  @override
+  Widget build(BuildContext context) {
+    final many = step.choices.length > 3;
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              color: SankoColors.navy,
+              border: Border(
+                bottom: BorderSide(color: SankoColors.brass, width: 2),
+              ),
+            ),
+            padding: const EdgeInsets.fromLTRB(24, 22, 20, 16),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        step.title.toUpperCase(),
+                        style: const TextStyle(
+                          color: SankoColors.brass,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: 1.2,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        itemName,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 26,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                if (position != null)
+                  Text(
+                    position!,
+                    style: const TextStyle(color: Colors.white70, fontSize: 15),
+                  ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+            child: GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: many ? 2 : 1,
+              mainAxisSpacing: 10,
+              crossAxisSpacing: 10,
+              childAspectRatio: many ? 3.2 : 5.6,
+              children: [
+                for (final c in step.choices)
+                  FilledButton(
+                    style: FilledButton.styleFrom(
+                      backgroundColor: WaiterColors.raised,
+                      foregroundColor: SankoColors.ink,
+                    ),
+                    onPressed: () => Navigator.pop(context, c),
+                    child: Text(c, style: const TextStyle(fontSize: 18)),
+                  ),
+              ],
+            ),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Odustani'),
+          ),
+          const SizedBox(height: 4),
+        ],
       ),
     );
   }
@@ -564,7 +744,7 @@ class _MyOrderCard extends StatelessWidget {
             ),
             const SizedBox(height: 6),
             Text(
-              order.lines.map((l) => '${l.qty}× ${l.name}').join(', '),
+              order.lines.map((l) => '${l.qty}× ${l.label}').join(', '),
               style: const TextStyle(color: WaiterColors.muted),
             ),
             const SizedBox(height: 4),

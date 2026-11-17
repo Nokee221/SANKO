@@ -13,7 +13,7 @@ import 'predaja_screen.dart';
 import 'scope.dart';
 import 'ulaz_screen.dart';
 
-/// Prodano u smjeni, po artiklu. Kad je uneseno sve, slijedi predaja i zaključenje.
+/// Ostatak na kraju smjene, po artiklu (kafa: prodane porcije). Kad je uneseno sve, slijedi predaja i zaključenje.
 /// Zatvara se sa `true` ako je smjena zaključena.
 class StanjeScreen extends StatefulWidget {
   const StanjeScreen({super.key, required this.shiftId});
@@ -27,25 +27,30 @@ class StanjeScreen extends StatefulWidget {
 class _StanjeScreenState extends State<StanjeScreen> {
   bool _onlyMissing = false;
 
+  /// Za artikle na komad konobar broji koliko je ostalo; za kafu i nes iz aparata
+  /// upisuje koliko je porcija prodano, a grami se oduzmu sami.
   Future<void> _edit(ObracunLine line) async {
     final counter = line.kind == ItemKind.counter;
     final result = await showQtyPad(
       context,
-      mode: 'Prodano',
+      mode: counter ? 'Prodano porcija' : 'Ostalo na šanku',
       itemName: line.name,
       color: ModeColors.stanje,
       hint: counter
           ? '${fmtKm(line.price)} po porciji · na zalihi ${fmtGrams(line.total)} '
                 '(${line.portion} g po porciji)'
-          : '${fmtKm(line.price)} po komadu · na šanku ${line.total}',
-      initial: line.consumed,
+          : line.received == 0
+          ? 'Bilo na šanku ${line.total}'
+          : 'Bilo na šanku ${line.total} (${line.opening} + ulaz ${line.received})',
+      initial: counter ? line.consumed : line.closing,
     );
     if (result == null || !mounted) return;
+    final repo = RepoScope.of(context);
     await guard(
       context,
-      () => RepoScope.of(
-        context,
-      ).setSoldQty(widget.shiftId, line.itemId, result.value),
+      () => counter
+          ? repo.setSoldQty(widget.shiftId, line.itemId, result.value)
+          : repo.setClosingQty(widget.shiftId, line.itemId, result.value),
     );
   }
 
@@ -74,7 +79,7 @@ class _StanjeScreenState extends State<StanjeScreen> {
             : lines;
         return ModeScaffold(
           title: 'STANJE',
-          subtitle: 'Koliko je prodano u smjeni',
+          subtitle: 'Koliko je ostalo na kraju smjene',
           icon: Icons.fact_check_outlined,
           color: ModeColors.stanje,
           bottom: ModeButton(
@@ -148,8 +153,12 @@ class _StanjeScreenState extends State<StanjeScreen> {
                           name: l.name,
                           image: images[l.itemId],
                           color: ModeColors.stanje,
-                          value: l.consumed?.toString(),
-                          note: l.kind == ItemKind.counter ? 'porcije' : null,
+                          value: l.kind == ItemKind.counter
+                              ? l.consumed?.toString()
+                              : l.closing?.toString(),
+                          note: l.kind == ItemKind.counter
+                              ? 'prodane porcije'
+                              : null,
                           onTap: () => _edit(l),
                         ),
                     ],

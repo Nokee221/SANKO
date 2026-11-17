@@ -70,6 +70,10 @@ abstract interface class AdminData implements Listenable {
   /// Trenutna zaliha artikala koji se broje na komad.
   Future<List<StockLevel>> currentStock();
 
+  /// Koliko je čega ostalo nakon zadnje zaključene smjene. Artikal koji još nije
+  /// bio ni u jednoj zaključenoj smjeni ima početno stanje.
+  Future<PreviousStock> previousStock();
+
   /// Zaključuje smjenu umjesto konobara. [counts] je stanje po artiklu koje gazda unosi;
   /// za ostale artikle važi ono što je telefon već poslao. Uz [handover] se upisuje
   /// i kuhinja i predaja novca.

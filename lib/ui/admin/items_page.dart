@@ -54,129 +54,40 @@ class ItemsPage extends StatelessWidget {
     List<CatalogImage> catalog,
   ) {
     final image = catalog.where((c) => c.id == item.imageId).firstOrNull;
-    const muted = TextStyle(color: SankoColors.muted, fontSize: 14);
-    // Telefon: dodir na red otvara izmjenu, a brisanje je u meniju.
-    if (isCompact(context)) {
-      return InkWell(
-        onTap: () => _edit(context, item, catalog),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 10, 0, 10),
-          child: Row(
-            children: [
-              _Thumb(bytes: image?.bytes, size: 44),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      item.name,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      [
-                        if (item.kind == ItemKind.counter)
-                          '${item.portion} g po porciji',
-                        'početno ${item.initialQty}${item.kind == ItemKind.counter ? ' g' : ''}',
-                        if (item.minQty != null) 'min ${item.minQty}',
-                      ].join(' · '),
-                      style: muted.copyWith(fontSize: 13),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                fmtKm(item.price),
+    final compact = isCompact(context);
+    // U listi su samo slika i naziv; ostalo se vidi i mijenja u izmjeni artikla.
+    return InkWell(
+      onTap: () => _edit(context, item, catalog),
+      child: Padding(
+        padding: EdgeInsets.fromLTRB(compact ? 14 : 20, 8, 10, 8),
+        child: Row(
+          children: [
+            _Thumb(bytes: image?.bytes, size: compact ? 44 : 40),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Text(
+                item.name,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(
                   fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  fontFeatures: tabularFigures,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
-              PopupMenuButton<bool>(
-                tooltip: 'Više',
-                icon: const Icon(Icons.more_vert, color: SankoColors.muted),
-                onSelected: (edit) => edit
-                    ? _edit(context, item, catalog)
-                    : _remove(context, item),
-                itemBuilder: (_) => const [
-                  PopupMenuItem(value: true, child: Text('Izmijeni')),
-                  PopupMenuItem(value: false, child: Text('Obriši')),
-                ],
-              ),
-            ],
-          ),
+            ),
+            IconButton(
+              tooltip: 'Uredi',
+              icon: const Icon(Icons.edit_outlined, size: 20),
+              color: SankoColors.muted,
+              onPressed: () => _edit(context, item, catalog),
+            ),
+            IconButton(
+              tooltip: 'Izbriši',
+              icon: const Icon(Icons.delete_outline, size: 20),
+              color: SankoColors.muted,
+              onPressed: () => _remove(context, item),
+            ),
+          ],
         ),
-      );
-    }
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(20, 8, 10, 8),
-      child: Row(
-        children: [
-          SizedBox(width: 36, child: Text('${index + 1}', style: muted)),
-          _Thumb(bytes: image?.bytes, size: 36),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Row(
-              children: [
-                Flexible(
-                  child: Text(
-                    item.name,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Tag(item.kind == ItemKind.counter ? 'Grami' : 'Zaliha'),
-                if (item.minQty != null) ...[
-                  const SizedBox(width: 8),
-                  Tag('min ${item.minQty}'),
-                ],
-              ],
-            ),
-          ),
-          SizedBox(
-            width: 190,
-            child: Text(
-              'Početno stanje ${item.initialQty}',
-              textAlign: TextAlign.right,
-              style: muted,
-            ),
-          ),
-          SizedBox(
-            width: 120,
-            child: Text(
-              fmtKm(item.price),
-              textAlign: TextAlign.right,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                fontFeatures: tabularFigures,
-              ),
-            ),
-          ),
-          const SizedBox(width: 12),
-          IconButton(
-            tooltip: 'Izmijeni',
-            icon: const Icon(Icons.edit_outlined, size: 20),
-            color: SankoColors.muted,
-            onPressed: () => _edit(context, item, catalog),
-          ),
-          IconButton(
-            tooltip: 'Obriši',
-            icon: const Icon(Icons.delete_outline, size: 20),
-            color: SankoColors.muted,
-            onPressed: () => _remove(context, item),
-          ),
-        ],
       ),
     );
   }

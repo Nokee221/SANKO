@@ -752,6 +752,39 @@ class Repository extends ChangeNotifier implements AdminData {
   }
 
   @override
+  Future<PreviousStock> previousStock() async {
+    final last = await _db.rawQuery(
+      '$_shiftSelect WHERE s.closed_at IS NOT NULL ORDER BY s.closed_at DESC LIMIT 1',
+    );
+    final shift = last.isEmpty ? null : Shift.fromRow(last.first);
+    final rows = await _db.rawQuery('''
+      SELECT i.id, i.name, i.kind, i.portion, i.image_id,
+        COALESCE(
+          (SELECT l.closing_qty FROM shift_lines l JOIN shifts s ON s.id = l.shift_id
+           WHERE l.item_id = i.id AND s.closed_at IS NOT NULL
+           ORDER BY s.closed_at DESC LIMIT 1),
+          i.initial_qty) AS qty
+      FROM items i
+      WHERE i.active = 1
+      ORDER BY i.sort_order, i.name
+    ''');
+    return PreviousStock(
+      shift: shift,
+      rows: [
+        for (final r in rows)
+          StockRow(
+            itemId: r['id'] as String,
+            name: r['name'] as String,
+            kind: ItemKind.values.byName(r['kind'] as String),
+            qty: r['qty'] as int,
+            portion: r['portion'] as int,
+            imageId: r['image_id'] as String?,
+          ),
+      ],
+    );
+  }
+
+  @override
   Future<void> adminCloseShift(
     String shiftId,
     Map<String, int> counts, {

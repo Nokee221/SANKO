@@ -328,3 +328,30 @@ class ShiftCorrection {
   final String? note;
   final DateTime correctedAt;
 }
+
+/// Koliko je artikla ostalo nakon zadnje zaključene smjene; kafa u gramima.
+class StockRow {
+  const StockRow({
+    required this.itemId,
+    required this.name,
+    required this.kind,
+    required this.qty,
+    this.portion = 1,
+    this.imageId,
+  });
+
+  final String itemId;
+  final String name;
+  final ItemKind kind;
+  final int qty;
+  final int portion;
+  final String? imageId;
+}
+
+/// Stanje lokala nakon zadnje zaključene smjene; [shift] je null dok smjene nije bilo.
+class PreviousStock {
+  const PreviousStock({required this.rows, this.shift});
+
+  final Shift? shift;
+  final List<StockRow> rows;
+}

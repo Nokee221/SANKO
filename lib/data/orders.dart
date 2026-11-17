@@ -63,12 +63,19 @@ class OrderLine {
     required this.name,
     required this.price,
     required this.qty,
+    this.variant = '',
   });
 
   final String itemId;
   final String name;
   final int price;
   final int qty;
+
+  /// Izbor uz stavku, npr. "Duža, Sa mlijekom"; prazno kad ga nema.
+  final String variant;
+
+  /// Naziv sa izborom: "KAFA (Duža, Sa mlijekom)".
+  String get label => variant.isEmpty ? name : '$name ($variant)';
 
   int get amount => price * qty;
 
@@ -77,6 +84,7 @@ class OrderLine {
     name: j['name'] as String,
     price: j['price'] as int,
     qty: j['qty'] as int,
+    variant: j['variant'] as String? ?? '',
   );
 }
 
@@ -128,11 +136,27 @@ class Order {
   );
 }
 
+/// Stavka korpe: artikal sa izborom; ista kafa sa drugim izborom je druga stavka.
+class CartKey {
+  const CartKey(this.itemId, [this.variant = '']);
+
+  final String itemId;
+  final String variant;
+
+  @override
+  bool operator ==(Object other) =>
+      other is CartKey && other.itemId == itemId && other.variant == variant;
+
+  @override
+  int get hashCode => Object.hash(itemId, variant);
+}
+
 /// Narudžba koju konobar šalje. Oznaku pravi telefon, pa ponovljeno slanje ne pravi duplikat.
 class NewOrder {
   const NewOrder({
     required this.id,
-    required this.quantities,
+    this.quantities = const {},
+    this.lines = const {},
     this.tableId,
     this.note,
   });
@@ -141,8 +165,11 @@ class NewOrder {
   final String? tableId;
   final String? note;
 
-  /// Količina po artiklu, redom kako su kucani.
+  /// Količina po artiklu bez izbora.
   final Map<String, int> quantities;
+
+  /// Količina po stavci sa izborom, redom kako su kucane.
+  final Map<CartKey, int> lines;
 
   Map<String, Object?> toPayload() => {
     'id': id,
@@ -150,7 +177,10 @@ class NewOrder {
     'note': note,
     'lines': [
       for (final e in quantities.entries)
-        if (e.value > 0) {'item_id': e.key, 'qty': e.value},
+        if (e.value > 0) {'item_id': e.key, 'variant': '', 'qty': e.value},
+      for (final e in lines.entries)
+        if (e.value > 0)
+          {'item_id': e.key.itemId, 'variant': e.key.variant, 'qty': e.value},
     ],
   };
 }

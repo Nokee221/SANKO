@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../data/orders.dart';
 import '../common.dart';
@@ -37,7 +36,7 @@ class TablesPage extends StatelessWidget {
               height: 46,
               child: FilledButton.icon(
                 icon: const Icon(Icons.add),
-                label: const Text('Dodaj stolove'),
+                label: const Text('Dodaj sto'),
                 onPressed: () => showDialog<void>(
                   context: context,
                   builder: (_) => const _TablesDialog(),
@@ -103,7 +102,7 @@ class TablesPage extends StatelessWidget {
   }
 }
 
-/// Dodaje jedan sto ili više njih odjednom, npr. "Sto" od 1 do 12.
+/// Dodaje jedan sto; gazda upisuje naziv ručno (npr. "Sto 4" ili "Terasa").
 class _TablesDialog extends StatefulWidget {
   const _TablesDialog();
 
@@ -112,106 +111,38 @@ class _TablesDialog extends StatefulWidget {
 }
 
 class _TablesDialogState extends State<_TablesDialog> {
-  final _name = TextEditingController(text: 'Sto');
-  final _from = TextEditingController(text: '1');
-  final _to = TextEditingController();
+  final _name = TextEditingController();
 
   @override
   void dispose() {
     _name.dispose();
-    _from.dispose();
-    _to.dispose();
     super.dispose();
   }
 
-  /// Nazivi stolova koji će se dodati; prazno kad unos nije potpun.
-  List<String> get _names {
-    final name = _name.text.trim();
-    final from = int.tryParse(_from.text);
-    final to = int.tryParse(_to.text) ?? from;
-    if (from == null) return name.isEmpty ? [] : [name];
-    if (to == null || to < from || to - from >= 100) return [];
-    return [for (var n = from; n <= to; n++) name.isEmpty ? '$n' : '$name $n'];
-  }
-
   Future<void> _save() async {
-    final names = _names;
     final saved = await guard(
       context,
-      () => AdminScope.of(context).addTables(names),
+      () => AdminScope.of(context).addTables([_name.text]),
     );
     if (saved && mounted) Navigator.pop(context);
   }
 
   @override
   Widget build(BuildContext context) {
-    final names = _names;
-    final number = InputDecoration(
-      counterText: '',
-      labelText: 'Od',
-      hintText: 'bez broja',
-    );
     return AlertDialog(
-      scrollable: true,
-      title: const Text('Dodaj stolove'),
+      title: const Text('Novi sto'),
       content: SizedBox(
         width: 340,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: _name,
-              autofocus: true,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Naziv',
-                helperText: 'npr. Sto, Terasa ili Šank',
-              ),
-              onChanged: (_) => setState(() {}),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _from,
-                    keyboardType: TextInputType.number,
-                    maxLength: 3,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: number,
-                    onChanged: (_) => setState(() {}),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _to,
-                    keyboardType: TextInputType.number,
-                    maxLength: 3,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    decoration: number.copyWith(
-                      labelText: 'Do',
-                      hintText: 'samo jedan',
-                    ),
-                    onChanged: (_) => setState(() {}),
-                    onSubmitted: (_) => _save(),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                names.isEmpty
-                    ? 'Unesite naziv ili ispravan raspon brojeva.'
-                    : names.length <= 4
-                    ? 'Dodaje: ${names.join(', ')}'
-                    : 'Dodaje ${names.length}: ${names.first}, ${names[1]} … ${names.last}',
-                style: const TextStyle(color: SankoColors.muted),
-              ),
-            ),
-          ],
+        child: TextField(
+          controller: _name,
+          autofocus: true,
+          textCapitalization: TextCapitalization.sentences,
+          decoration: const InputDecoration(
+            labelText: 'Naziv stola',
+            hintText: 'npr. Sto 4 ili Terasa 2',
+          ),
+          onChanged: (_) => setState(() {}),
+          onSubmitted: (_) => _save(),
         ),
       ),
       actions: [
@@ -220,7 +151,7 @@ class _TablesDialogState extends State<_TablesDialog> {
           child: const Text('Odustani'),
         ),
         FilledButton(
-          onPressed: names.isEmpty ? null : _save,
+          onPressed: _name.text.trim().isEmpty ? null : _save,
           child: const Text('Dodaj'),
         ),
       ],

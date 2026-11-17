@@ -6,9 +6,9 @@ import 'account.dart';
 import 'admin_session.dart';
 import 'izvjestaj_page.dart';
 import 'items_page.dart';
-import 'narudzba_page.dart';
 import 'obracun_page.dart';
 import 'prosjek_page.dart';
+import 'stanje_page.dart';
 import 'tables_page.dart';
 import 'widgets.dart';
 import 'workers_page.dart';
@@ -44,7 +44,7 @@ class _MobileAdminShellState extends State<MobileAdminShell> {
   static const _tabs = [
     (Icons.table_chart_outlined, Icons.table_chart, 'Obračun'),
     (Icons.bar_chart_outlined, Icons.bar_chart, 'Izvještaj'),
-    (Icons.shopping_cart_outlined, Icons.shopping_cart, 'Narudžba'),
+    (Icons.inventory_2_outlined, Icons.inventory_2, 'Stanje'),
     (Icons.local_bar_outlined, Icons.local_bar, 'Artikli'),
     (Icons.menu, Icons.menu, 'Više'),
   ];
@@ -54,7 +54,7 @@ class _MobileAdminShellState extends State<MobileAdminShell> {
     return switch (i) {
       0 => ObracunPage(venueName: venueName),
       1 => IzvjestajPage(venueName: venueName),
-      2 => NarudzbaPage(venueName: venueName),
+      2 => const StanjePage(),
       3 => const ItemsPage(),
       _ => _MorePage(
         session: widget.session,

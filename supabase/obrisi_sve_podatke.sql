@@ -13,8 +13,8 @@ end;
 $$;
 
 -- Firme i sve što od njih zavisi: lokali, gazde, radnici, PIN-ovi, prijave telefona,
--- artikli, smjene, ulazi, rashodi, predaje, ispravke, uplate, povezani Telegram razgovori
--- i obavještenja koja čekaju slanje.
+-- artikli, smjene, ulazi, rashodi, predaje, ispravke, uplate, stolovi, narudžbe,
+-- povezani Telegram razgovori i obavještenja koja čekaju slanje.
 truncate table public.organizations cascade;
 truncate table private.login_attempts;
 
@@ -28,5 +28,7 @@ select
   (select count(*) from public.organizations) as firme,
   (select count(*) from public.venues) as lokali,
   (select count(*) from public.shifts) as smjene,
+  (select count(*) from public.orders) as narudzbe,
+  (select count(*) from public.venue_tables) as stolovi,
   (select count(*) from private.telegram_chats) as telegram_razgovori,
   (select count(*) from public.catalog_images) as slike_u_katalogu;

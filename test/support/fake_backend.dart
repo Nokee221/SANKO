@@ -285,6 +285,7 @@ class FakeBackend implements WaiterBackend {
             name: items[l['item_id']]!.name,
             price: items[l['item_id']]!.price,
             qty: l['qty'] as int,
+            variant: l['variant'] as String? ?? '',
           ),
       ],
     );

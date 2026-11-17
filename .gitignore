@@ -56,3 +56,6 @@ app.*.map.json
 
 # Promo video i radni fajlovi alata /brag; nisu dio aplikacije.
 /brag-output*/
+
+# Video snimci ekrana (tool/snimci_u_video.py).
+/snimci/

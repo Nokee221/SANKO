@@ -223,12 +223,15 @@ void main() {
       await tester.pump();
     }
     await tapText('Potvrdi');
-    // Ne može se prodati više nego što je bilo na šanku.
-    await enterQty('KAPUCINO', '999');
-    expect(find.textContaining('Na šanku je bilo samo'), findsOneWidget);
-    await tapText('U redu');
-    await enterQty('KAPUCINO', '30');
-    await enterQty('ČAJ', '7');
+    // Za artikle na komad konobar upisuje koliko je ostalo.
+    await tapText('KAPUCINO');
+    expect(find.text('Bilo na šanku 72 (40 + ulaz 32)'), findsOneWidget);
+    for (final d in '42'.split('')) {
+      await tester.tap(find.text(d).last);
+      await tester.pump();
+    }
+    await tapText('Potvrdi');
+    await enterQty('ČAJ', '207');
     expect(
       find.text('Uneseno 3 od 33 · ${fmtKm(404 * 250 + 30 * 350 + 7 * 300)}'),
       findsOneWidget,
@@ -384,36 +387,17 @@ void main() {
     expect(find.text('Tačno predano'), findsOneWidget);
     expect(find.textContaining('gotovina'), findsWidgets);
 
-    await tapText('Narudžba');
-    expect(find.textContaining('Nijedan artikal nema minimum'), findsOneWidget);
-    // Gazda postavi minimum za kolu i đus; oba su sada ispod njega.
-    await tester.runAsync(() async {
-      for (final i in await server.items()) {
-        final (min, par) = switch (i.name) {
-          'KOLA' => (100, 144),
-          'ĐUS' => (48, null),
-          _ => (null, null),
-        };
-        if (min == null) continue;
-        await server.updateItem(
-          Item(
-            id: i.id,
-            name: i.name,
-            kind: i.kind,
-            price: i.price,
-            initialQty: i.initialQty,
-            imageId: i.imageId,
-            minQty: min,
-            parQty: par,
-          ),
-        );
-      }
-    });
-    await tester.pumpAndSettle();
-    expect(find.text('Pošalji na Viber'), findsOneWidget);
-    expect(find.text('KOLA'), findsOneWidget);
-    expect(find.text('ĐUS'), findsOneWidget);
-    await _shot('15_admin_narudzba');
+    // Stanje: koliko je ostalo nakon zadnje zaključene smjene (Bakirove, koju je
+    // zaključio gazda); kafa se od tada nije trošila.
+    await tapText('Stanje');
+    expect(find.textContaining('Ostalo nakon smjene 2, Bakir'), findsOneWidget);
+    expect(
+      find.text('136.920 g'),
+      findsOneWidget,
+      reason: '145.000 g − 404 × 20 g',
+    );
+    expect(find.text('oko 6846 porcija'), findsOneWidget);
+    await _shot('15_admin_stanje');
     expect(find.text('Obavještenja'), findsNothing, reason: 'za sada skriveno');
 
     await tapText('Prosjek');
@@ -421,7 +405,7 @@ void main() {
     await _shot('11b_admin_prosjek');
     await tapText('Artikli');
     expect(find.text('KAFA'), findsOneWidget);
-    await tester.tap(find.byTooltip('Izmijeni').first);
+    await tester.tap(find.byTooltip('Uredi').first);
     await tester.pumpAndSettle();
     expect(find.textContaining('Artikal je već bio u smjeni'), findsOneWidget);
     await tapText('Odustani');
